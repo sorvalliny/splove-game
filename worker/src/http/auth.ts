@@ -3,19 +3,16 @@ import { fail } from './envelope';
 import { verifyInitData } from '../telegram/verify';
 import { isChatMember } from '../telegram/api';
 import { upsertPlayer, needsMemberCheck, setMembership, type Player } from '../db/players';
-import { activeChats } from '../db/chats';
+import { isInAnyCommunity } from '../db/communities';
 
 /**
- * Игрок считается своим, если состоит хотя бы в одном чате, куда добавлен бот.
- * Пока ни один чат не зарегистрирован, работает чат из секрета — это стартовое состояние.
+ * Свой — тот, кто вошёл по ссылке-приглашению.
+ * Проверка членства в чате осталась запасным путём: она падает, если бота
+ * выгнали или Telegram недоступен, поэтому основной вход — ссылка.
  */
 async function checkMembership(env: Env, tgId: number): Promise<boolean> {
-  const chats = await activeChats(env.DB);
-  const ids = chats.length ? chats.map((c) => String(c.chat_id)) : [env.CHAT_ID];
-  for (const id of ids) {
-    if (await isChatMember(env.BOT_TOKEN, id, tgId)) return true;
-  }
-  return false;
+  if (await isInAnyCommunity(env.DB, tgId)) return true;
+  return isChatMember(env.BOT_TOKEN, env.CHAT_ID, tgId);
 }
 
 export type Authorized = { ok: true; player: Player } | { ok: false; res: Response };

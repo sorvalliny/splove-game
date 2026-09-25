@@ -12,6 +12,8 @@ export interface Env {
   ALLOWED_ORIGIN: string;
   WEBHOOK_SECRET: string;
   GAME_URL: string;
+  BOT_NAME: string;
+  INVITE_CODE: string;
 }
 
 type Handler = (req: Request, env: Env) => Promise<Response>;
