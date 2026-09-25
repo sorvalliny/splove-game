@@ -1,0 +1,12 @@
+name = "splove-api"
+main = "src/index.ts"
+compatibility_date = "2026-08-22"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "splove"
+database_id = "e8b0a65c-fc56-4d53-a236-ac7bea4f775f"
+
+[vars]
+ALLOWED_ORIGIN = "https://sorvalliny.github.io"
