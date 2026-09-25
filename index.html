@@ -129,6 +129,11 @@
 const cv=document.getElementById('c'),ctx=cv.getContext('2d'),$=id=>document.getElementById(id);
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const hash=i=>{const s=Math.sin(i*127.1+311.7)*43758.5453;return s-Math.floor(s)};
+// Сеяный генератор: заплыв должен воспроизводиться на сервере до последнего числа.
+// Косметика — брызги, дым, шум в звуке — остаётся на системном Math.random.
+let rndState=1,simT=0,simTick=0;
+const seedRnd=s=>{rndState=s>>>0||1};
+const rnd=()=>{rndState=(rndState+0x6D2B79F5)>>>0;let t=rndState;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296};
 const n1=x=>{const i=Math.floor(x),f=x-i,u=f*f*(3-2*f);return hash(i)+(hash(i+1)-hash(i))*u};
 const fbm=x=>n1(x)*.55+n1(x*2.07+7)*.28+n1(x*4.3+13)*.17;
 const lerp=(a,b,t)=>a+(b-a)*t,clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -218,18 +223,19 @@ const DIFF={
   normal:{name:'Сплав',gap:1.3,ramp:8000,loss:.2,inv:1.6,grace:250,barge:1500,hmel:.8,oar:.25,speed:1,hit:.9},
   hard:{name:'Шторм',gap:.9,ramp:4500,loss:.3,inv:1.1,grace:120,barge:500,hmel:1.1,oar:.15,speed:1.15,hit:1}};
 let LV='easy';const D=()=>DIFF[LV];globalThis.currentLevel=()=>LV;
-let hudCache={},G,state='menu',t=0,best=0,paused=false,runStartedAt=0,continuesLeft=0,runFinalized=false;
+let hudCache={},G,state='menu',t=0,best=0,paused=false,runStartedAt=0,continuesLeft=0,runFinalized=false,runSeed=0;
 const CONTINUES=2; // столько раз за заплыв можно вернуться в последний лагерь
 const CAMPS=['Ширяево','Жигули','Самарская Лука','Молодецкий курган','Царёв курган','Усинский залив','Хвалынь'];
-function reset(){
-  const s0=Math.random()*80000;
+function reset(seed){
+  seedRnd(seed);
+  const s0=rnd()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
     objs:[],camps:[],fx:[],texts:[],npc:null,
     nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+800*11*U,campGap:800*11*U,lastCamp:null};
   lyric=[];hudCache={};
 }
-reset();
+reset(1);
 
 // ---------- spawning ----------
 function place(u,s){return cx(s)+u*riverW(s)/2}
@@ -244,18 +250,18 @@ function circlesFor(o){
 function spawn(){
   const k=G.k,m=meters(),d=Math.min(1,m/D().ramp),ahead=k.s+H*1.5;
   while(G.nObs<ahead){const s=G.nObs;
-    const ms=(s-k.s0)/M();if(G.capt<=0&&ms>D().grace){const r=Math.random();let type=r<.4?'log':r<.66?'buoy':r<.86||ms<D().barge?'bar':'barge';if(ms<D().grace+400&&type==='bar')type='buoy';
-      const o={type,s,x:place(Math.random()*1.6-.8,s),rot:Math.random()*3,seed:Math.random()*99,vs:type==='barge'?-55*U:0};
-      if(type==='bar'){const bs=.55+.45*d;o.rx=(70+Math.random()*80)*U*bs;o.rs=(26+Math.random()*18)*U*bs;o.x=place(Math.random()*1.1-.55,s)}
-      if(type==='barge')o.x=place(Math.random()*1.2-.6,s+300*U),o.s=s+300*U;
+    const ms=(s-k.s0)/M();if(G.capt<=0&&ms>D().grace){const r=rnd();let type=r<.4?'log':r<.66?'buoy':r<.86||ms<D().barge?'bar':'barge';if(ms<D().grace+400&&type==='bar')type='buoy';
+      const o={type,s,x:place(rnd()*1.6-.8,s),rot:rnd()*3,seed:rnd()*99,vs:type==='barge'?-55*U:0};
+      if(type==='bar'){const bs=.55+.45*d;o.rx=(70+rnd()*80)*U*bs;o.rs=(26+rnd()*18)*U*bs;o.x=place(rnd()*1.1-.55,s)}
+      if(type==='barge')o.x=place(rnd()*1.2-.6,s+300*U),o.s=s+300*U;
       o.c=circlesFor(o);G.objs.push(o)}
-    G.nObs+=lerp(460,190,d)*U*D().gap*(.65+Math.random()*.7)}
-  while(G.nPick<ahead){const s=G.nPick,r=Math.random(),lowOar=k.oars.includes(0);
+    G.nObs+=lerp(460,190,d)*U*D().gap*(.65+rnd()*.7)}
+  while(G.nPick<ahead){const s=G.nPick,r=rnd(),lowOar=k.oars.includes(0);
     const type=r<(lowOar?D().oar:.06)?'oar':r<.55?'beer':r<.8?'wine':'teq';
-    G.objs.push({type,s,x:place(Math.random()*1.6-.8,s),seed:Math.random()*99,pick:1});G.nPick+=(300+Math.random()*260)*U}
-  if(G.nGena<ahead){const sd=Math.random()<.5?-1:1;G.objs.push({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+Math.random()*7000)*U}
-  if(G.nCapt<ahead){G.objs.push({type:'capt',s:G.nCapt,x:place(Math.random()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+Math.random()*10000)*U}
-  if(G.nBoat<ahead){G.objs.push({type:'boat',s:G.nBoat,x:place(Math.random()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(Math.random()<.5?-1:1)*40*U});G.nBoat+=(8000+Math.random()*6000)*U}
+    G.objs.push({type,s,x:place(rnd()*1.6-.8,s),seed:rnd()*99,pick:1});G.nPick+=(300+rnd()*260)*U}
+  if(G.nGena<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+rnd()*7000)*U}
+  if(G.nCapt<ahead){G.objs.push({type:'capt',s:G.nCapt,x:place(rnd()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+rnd()*10000)*U}
+  if(G.nBoat<ahead){G.objs.push({type:'boat',s:G.nBoat,x:place(rnd()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(rnd()<.5?-1:1)*40*U});G.nBoat+=(8000+rnd()*6000)*U}
   if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.campGap*=2;G.nCamp+=G.campGap}
 }
 const meters=()=>Math.round((G.k.s-G.k.s0)/M());
@@ -277,8 +283,21 @@ addEventListener('keydown',e=>{const k=e.key;
   if(k==='ArrowUp'||k==='w'||k==='ц'){steer(-1);steer(1)}
   if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();start()}
   if(k==='m'||k==='ь')toggleSheet()});
-function start(){audio();if(AC.state==='suspended')AC.resume();reset();G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
+function start(){audio();if(AC.state==='suspended')AC.resume();runSeed=(Math.random()*4294967296)>>>0;simT=0;simTick=0;acc=0;reset(runSeed);G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
 $('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
+// Проба воспроизводимости: прогоняет чистую симуляцию без ввода и возвращает
+// отпечаток состояния. Два вызова с одним seed обязаны совпасть до числа.
+globalThis.__simProbe=(seed,steps)=>{
+  const keep={state,G,simT,simTick};
+  reset(seed);state='play';simT=0;simTick=0;
+  for(let i=0;i<steps;i++){spawn();update(SIM_DT)}
+  const k=G.k;
+  const fp={s:k.s,x:k.x,ang:k.ang,onb:G.onb,bank:G.bank,hmel:G.hmel,
+    oars:k.oars.join(''),objs:G.objs.length,camps:G.camps.length,
+    objSum:G.objs.reduce((a,o)=>a+o.s+o.x,0)};
+  state=keep.state;G=keep.G;simT=keep.simT;simTick=keep.simTick;
+  return fp;
+};
 $('start').onclick=start;$('cont').onclick=continueRun;$('again').onclick=()=>{finishRun();$('over').classList.add('hide');$('menu').classList.remove('hide');state='menu'};
 function toggleSheet(){const o=$('sheet').classList.toggle('open');paused=o&&state==='play';audio();if(AC.state==='suspended')AC.resume();markTrack()}
 function markTrack(){[...$('sheet').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.t===MUS.track));$('trk').textContent=G.gena>0?'Гена на гитаре':TR[MUS.track].name}
@@ -334,7 +353,7 @@ function puff(x,s){for(let i=0;i<14;i++){const a=Math.random()*6.28,v=(30+Math.r
 function hit(o){
   const k=G.k;if(k.inv>0)return;k.inv=D().inv;sfx.hit();G.shake=12;G.flash=.35;
   const have=k.oars.map((v,i)=>v?i:-1).filter(i=>i>=0);
-  if(have.length){const i=have[Math.floor(Math.random()*have.length)];k.oars[i]=0;G.oarsLost++;G.objs.push({type:'lostoar',x:k.x+(i-1)*14*U,s:k.s,seed:Math.random()*9,vx:(Math.random()-.5)*60*U,life:3})}
+  if(have.length){const i=have[Math.floor(rnd()*have.length)];k.oars[i]=0;G.oarsLost++;G.objs.push({type:'lostoar',x:k.x+(i-1)*14*U,s:k.s,seed:rnd()*9,vx:(rnd()-.5)*60*U,life:3})}
   if(G.instr>0)floatT('инструктор прикрыл',k.x,k.s+70*U,'#9fe0c8');
   else{const lost=Math.round(G.onb*D().loss);G.onb-=lost;G.burned+=lost;floatT('весло за борт  −'+lost,k.x,k.s+70*U,'#ff9c85')}
   if(oarCount()===0){state='dying';setTimeout(gameOver,1100)}
@@ -354,17 +373,18 @@ function collect(o){
 
 // ---------- update ----------
 function update(dt){
+  simT+=dt;simTick++;
   const k=G.k,m=meters(),d=Math.min(1,m/D().ramp);G.tip=Math.max(0,(G.tip||0)-dt);
   G.hmel=Math.max(0,G.hmel-2.2*dt);G.gena=Math.max(0,G.gena-dt);G.capt=Math.max(0,G.capt-dt);G.instr=Math.max(0,G.instr-dt);
   if(G._gena>0&&G.gena===0){floatT('Гена сошёл на берег',k.x,k.s+100*U);markTrack()}G._gena=G.gena;
   const w=riverW(k.s),c=cx(k.s),u=(k.x-c)/(w/2),cur=(40+d*30)*U*D().speed*(1-.3*u*u),cvx=slope(k.s)*cur;
   if(G.tow>0){
-    G.tow-=dt;k.ang=Math.sin(t*7)*.24+Math.sin(t*2.3)*.1;k.x=lerp(k.x,c+Math.sin(t*.9)*w*.15,dt*1.5);k.s+=(cur+390*U)*dt;k.kvx=k.kvs=0;
+    G.tow-=dt;k.ang=Math.sin(simT*7)*.24+Math.sin(simT*2.3)*.1;k.x=lerp(k.x,c+Math.sin(simT*.9)*w*.15,dt*1.5);k.s+=(cur+390*U)*dt;k.kvx=k.kvs=0;
     if(Math.random()<dt*18)splash(k.x+(Math.random()-.5)*20*U,k.s-40*U,2,60);
     if(G.tow<=0){floatT('Катер отцепился',k.x,k.s+100*U);k.F=Math.max(k.F,160*U)}
   }else{
     const tF=oarCount()*(44+d*16)*U*D().speed*(G.capt>0?1.9:1);k.F+=(tF-k.F)*dt*1.4;
-    if(G.hmel>0){k.av+=(n1(t*1.4)-.5)*G.hmel*.09*dt*10*D().hmel;if(G.hmel>55&&Math.random()<dt*.5){sfx.hic();floatT('ик!',k.x+30*U,k.s+40*U)}}
+    if(G.hmel>0){k.av+=(n1(simT*1.4)-.5)*G.hmel*.09*dt*10*D().hmel;if(G.hmel>55&&Math.random()<dt*.5){sfx.hic();floatT('ик!',k.x+30*U,k.s+40*U)}}
     let hold=0;for(const v of held.values())hold+=v;k.av+=clamp(hold,-1,1)*4.2*dt;k.av*=Math.exp(-3.2*dt);k.ang+=k.av*dt;k.ang+=-k.ang*.75*dt;k.ang=clamp(k.ang,-1.15,1.15);
     k.kvx*=Math.exp(-3*dt);k.kvs*=Math.exp(-3*dt);
     k.x+=(cvx+Math.sin(k.ang)*k.F+k.kvx)*dt;k.s+=(cur+Math.cos(k.ang)*k.F+k.kvs)*dt;
@@ -550,10 +570,18 @@ function hud(){
 
 // ---------- loop ----------
 let last=performance.now();
+// Шаг симуляции фиксирован: иначе 60 и 120 Гц расходятся сами по себе
+// и сервер не сможет переиграть заплыв.
+const SIM_DT=1/120,MAX_STEPS=16;
+let acc=0;
 function frame(nowT){
   const rdt=Math.min(.04,(nowT-last)/1000);last=nowT;
   if(!paused){t+=rdt;
-    if(state==='play'){spawn();update(rdt)}
+    if(state==='play'){
+      acc+=rdt;let steps=0;
+      while(acc>=SIM_DT&&steps<MAX_STEPS&&state==='play'){acc-=SIM_DT;spawn();update(SIM_DT);steps++}
+      if(steps>=MAX_STEPS)acc=0; // подвисший кадр не догоняем рывком
+    }
     else{const k=G.k;k.s+=70*U*rdt;k.x=lerp(k.x,cx(k.s),rdt);k.ph+=rdt*3;k.prevS=k.s;if(state==='menu'){G.nObs=G.nPick=k.s+H*1.5}}
     for(const f of G.fx){f.life-=rdt;if(f.ring){f.r+=30*U*rdt}else{f.x+=f.vx*rdt;f.s+=f.vs*rdt;f.vz-=420*U*rdt;f.z=Math.max(0,f.z+f.vz*rdt)}}
     G.fx=G.fx.filter(f=>f.life>0);for(const x of G.texts)x.life-=rdt;G.texts=G.texts.filter(x=>x.life>0);
