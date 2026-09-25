@@ -51,6 +51,7 @@
 </style>
 </head>
 <body>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <canvas id="c"></canvas>
 <div class="hud">
   <div class="sc"><div class="l">На воде</div><div class="v" id="onb">0</div><div class="bank" id="bank">В лагере: 0</div></div>
@@ -70,7 +71,7 @@
 </div>
 <div class="screen" id="menu">
   <h1>СПLOVE</h1>
-  <div class="by">Сплав по Волге. Авторская игра @sorval</div>
+  <div class="by" id="by">Сплав по Волге. Авторская игра @sorval</div>
   <p>Держите палец слева или справа, чтобы рулить, двумя пальцами — рывок. Удар стоит весла, лагерь сохраняет очки. Пиво, вино и текила дают очки и хмель.</p>
   <div class="lvl" id="lvl">
     <button data-l="easy" class="on">Прогулка<span>первый раз</span></button>
@@ -483,6 +484,20 @@ function frame(nowT){
 }
 requestAnimationFrame(frame);
 })();
+</script>
+<script type="module">
+import { ready, inTelegram } from './js/auth.js';
+import { session } from './js/api.js';
+
+ready();
+
+if (inTelegram()) {
+  const by = document.getElementById('by');
+  const r = await session();
+  if (r.ok) by.textContent = `${r.data.player.name}, добро пожаловать на воду`;
+  else if (r.error.code === 'not_a_member') by.textContent = 'Рейтинг только для участников чата сплава';
+  else if (r.error.code === 'offline') by.textContent = 'Связи нет, играем без рейтинга';
+}
 </script>
 </body>
 </html>
