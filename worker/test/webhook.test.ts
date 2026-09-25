@@ -86,3 +86,20 @@ describe('вебхук бота', () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe('правила', () => {
+  it('/rules присылает правила', async () => {
+    await hook(update('/rules'));
+    expect(sent[0].body.text).toContain('Вёсла — это жизни');
+  });
+
+  it('/rules работает и в личке', async () => {
+    await hook(update('/rules', 956875, 'private'));
+    expect(sent[0].body.text).toContain('Гена с гитарой');
+  });
+
+  it('кнопка называется «Вёсла на воду»', async () => {
+    await hook(update('/start'));
+    expect(sent[0].body.reply_markup.inline_keyboard[0][0].text).toContain('Вёсла на воду');
+  });
+});
