@@ -42,9 +42,11 @@ export async function sendMessage(
         ...(opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
       }),
     });
-    const body = (await res.json()) as { ok?: boolean };
+    const body = (await res.json()) as { ok?: boolean; description?: string };
+    if (body.ok !== true) console.error('sendMessage отклонён:', body.description);
     return body.ok === true;
-  } catch {
+  } catch (e) {
+    console.error('sendMessage упал:', (e as Error).message);
     return false;
   }
 }
