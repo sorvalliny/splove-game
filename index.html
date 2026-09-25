@@ -35,6 +35,7 @@
   .screen p{font-size:16px;line-height:1.45;max-width:36ch;margin:14px 0 22px}
   .screen button{align-self:flex-start;font-family:"Dela Gothic One",sans-serif;font-size:20px;color:var(--ink);background:var(--kayak);border:0;padding:15px 32px;border-radius:40px;cursor:pointer}
   .screen button:focus-visible{outline:3px solid var(--foam);outline-offset:4px}
+  .lvlTitle{font-size:13px;opacity:.7;margin:0 0 7px}
   .lvl{display:flex;gap:6px;margin:0 0 18px;max-width:420px}
   .lvl button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:10px 10px;border-radius:24px;box-shadow:none;text-align:left;line-height:1.2}
   .lvl button span{display:block;font-weight:400;font-size:12px;opacity:.75}
@@ -89,6 +90,7 @@
   <h1>СПLOVE</h1>
   <div class="by" id="by">Сплав по Волге. Авторская игра @sorval</div>
   <p>Держите палец слева или справа, чтобы рулить, двумя пальцами — рывок. Удар стоит весла, лагерь сохраняет очки. Пиво, вино и текила дают очки и хмель.</p>
+  <div class="lvlTitle">Сложность</div>
   <div class="lvl" id="lvl">
     <button data-l="easy" class="on">Прогулка<span>первый раз</span></button>
     <button data-l="normal">Сплав<span>как задумано</span></button>
@@ -101,7 +103,8 @@
   <div class="res"><div><b id="rB">0</b>несгораемая сумма</div><div><b id="rL">0</b>сгорело на воде</div><div><b id="rM">0</b>метров Волги</div></div>
   <p id="rT"></p>
   <div class="overBtns">
-    <button id="again">Выбрать уровень</button>
+    <button id="cont">Вернуться в лагерь</button>
+    <button id="again" class="ghost">Выбрать сложность</button>
     <button id="toBoard" class="ghost">Рейтинг</button>
   </div>
 </div>
@@ -210,14 +213,15 @@ const DIFF={
   normal:{name:'Сплав',gap:1.3,ramp:8000,loss:.2,inv:1.6,grace:250,barge:1500,hmel:.8,oar:.25,speed:1,hit:.9},
   hard:{name:'Шторм',gap:.9,ramp:4500,loss:.3,inv:1.1,grace:120,barge:500,hmel:1.1,oar:.15,speed:1.15,hit:1}};
 let LV='easy';const D=()=>DIFF[LV];globalThis.currentLevel=()=>LV;
-let hudCache={},G,state='menu',t=0,best=0,paused=false,runStartedAt=0;
+let hudCache={},G,state='menu',t=0,best=0,paused=false,runStartedAt=0,continuesLeft=0,runFinalized=false;
+const CONTINUES=2; // столько раз за заплыв можно вернуться в последний лагерь
 const CAMPS=['Ширяево','Жигули','Самарская Лука','Молодецкий курган','Царёв курган','Усинский залив','Хвалынь'];
 function reset(){
   const s0=Math.random()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
     objs:[],camps:[],fx:[],texts:[],npc:null,
-    nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+800*11*U,campGap:800*11*U};
+    nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+800*11*U,campGap:800*11*U,lastCamp:null};
   lyric=[];hudCache={};
 }
 reset();
@@ -268,23 +272,51 @@ addEventListener('keydown',e=>{const k=e.key;
   if(k==='ArrowUp'||k==='w'||k==='ц'){steer(-1);steer(1)}
   if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();start()}
   if(k==='m'||k==='ь')toggleSheet()});
-function start(){audio();if(AC.state==='suspended')AC.resume();reset();G.tip=7;runStartedAt=Date.now();state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
+function start(){audio();if(AC.state==='suspended')AC.resume();reset();G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
 $('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
-$('start').onclick=start;$('again').onclick=()=>{$('over').classList.add('hide');$('menu').classList.remove('hide');state='menu'};
+$('start').onclick=start;$('cont').onclick=continueRun;$('again').onclick=()=>{finishRun();$('over').classList.add('hide');$('menu').classList.remove('hide');state='menu'};
 function toggleSheet(){const o=$('sheet').classList.toggle('open');paused=o&&state==='play';audio();if(AC.state==='suspended')AC.resume();markTrack()}
 function markTrack(){[...$('sheet').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.t===MUS.track));$('trk').textContent=G.gena>0?'Гена на гитаре':TR[MUS.track].name}
 $('spk').onclick=toggleSheet;
 $('sheet').querySelectorAll('button').forEach(b=>b.onclick=()=>{MUS.track=b.dataset.t;markTrack();setTimeout(toggleSheet,180)});
 function gameOver(){
-  state='over';const m=meters();best=Math.max(best,G.bank);
+  state='over';const m=meters();
   $('rB').textContent=G.bank;$('rL').textContent=G.onb;$('rM').textContent=m;
-  $('rT').textContent='';
+  const canCont=continuesLeft>0&&G.lastCamp;
+  const cont=$('cont');
+  cont.style.display=canCont?'':'none';
+  if(canCont){
+    cont.textContent='Вернуться в «'+G.lastCamp.name+'»';
+    $('rT').textContent='Осталось возвращений: '+continuesLeft+'. Очки в лагере сохранены.';
+  }else{
+    $('rT').textContent='';
+  }
   $('over').classList.remove('hide');
+  if(!canCont)finishRun(m);
+}
+
+/** Заплыв уходит в рейтинг один раз, сколько бы возвращений в лагерь внутри него ни было. */
+function finishRun(m){
+  if(runFinalized)return;
+  runFinalized=true;
   globalThis.onRunEnd?.({
-    level:LV, bank:Math.round(G.bank), onboard:Math.round(G.onb), meters:m,
+    level:LV, bank:Math.round(G.bank), onboard:Math.round(G.onb), meters:m??meters(),
     durationMs:Date.now()-runStartedAt, oarsLost:G.oarsLost, startedAt:runStartedAt,
     levelName:D().name,
   });
+}
+
+/** Возврат в последний лагерь: та же река, те же очки, свежие вёсла. */
+function continueRun(){
+  if(continuesLeft<=0||!G.lastCamp)return;
+  continuesLeft--;
+  const k=G.k,at=G.lastCamp.s;
+  k.s=at;k.prevS=at;k.x=cx(at);k.ang=0;k.av=0;k.F=0;k.kvx=0;k.kvs=0;
+  k.oars=[1,1,1];k.inv=D().inv*2;
+  G.onb=0;G.objs=[];G.texts=[];G.fx=[];G.npc=null;G.instr=0;G.tow=0;
+  G.nObs=at+H*1.1;G.nPick=at+H*.9;
+  G.camps=G.camps.filter(c=>c.s>at);
+  state='play';$('over').classList.add('hide');
 }
 
 // ---------- helpers ----------
@@ -349,7 +381,7 @@ function update(dt){
   }
   G.objs=G.objs.filter(o=>!o.dead&&o.s>k.s-H*.7);
   // camps
-  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
+  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
@@ -544,6 +576,11 @@ function showBest(level) {
 }
 
 globalThis.onLevelPick = showBest;
+
+globalThis.updateBest = (level, best) => {
+  bests = { ...bests, [level]: best };
+  showBest(level);
+};
 
 if (inTelegram()) {
   const r = await session();

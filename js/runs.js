@@ -61,6 +61,11 @@ export function wireRuns(profile) {
     say(resultText(r.data, run));
     cacheBoard(run.level, r.data.board);
     renderBoard(run.level, r.data.board, me);
+
+    // Стартовый экран должен показывать свежий рекорд: игрок уходит туда сразу после заплыва.
+    if (r.data.best) {
+      globalThis.updateBest?.(run.level, r.data.best);
+    }
   };
 
   document.getElementById('toBoard')?.addEventListener('click', () => openBoard(lastLevel));
