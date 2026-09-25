@@ -2,6 +2,7 @@ import type { Env } from '../index';
 import { sendMessage } from '../telegram/api';
 import { getBoard } from '../db/runs';
 import { LEVELS, type Level } from '../game/plausible';
+import { registerChat, markGreeted, deactivateChat, migrateChat } from '../db/chats';
 
 const LEVEL_NAMES: Record<Level, string> = {
   easy: 'Прогулка',
@@ -28,8 +29,42 @@ async function boardText(env: Env): Promise<string> {
   return parts.join('\n\n');
 }
 
+const GROUPS = new Set(['group', 'supergroup']);
+const PRESENT = new Set(['member', 'administrator', 'creator']);
+
 interface Update {
-  message?: { chat?: { id?: number }; text?: string };
+  message?: {
+    chat?: { id?: number; type?: string };
+    text?: string;
+    migrate_to_chat_id?: number;
+  };
+  my_chat_member?: {
+    chat?: { id?: number; title?: string; type?: string };
+    new_chat_member?: { status?: string };
+  };
+}
+
+const JOINED_TEXT =
+  'Здравствуйте. Я веду рейтинг СПLOVE для этого чата.\n\n' +
+  'Играть — кнопкой ниже. Слово «топ» покажет таблицу. Больше я сюда без повода не пишу.';
+
+/** Бота добавили в группу или убрали из неё. */
+async function handleMembership(u: NonNullable<Update['my_chat_member']>, env: Env, now: number) {
+  const chat = u.chat;
+  if (!chat?.id || !GROUPS.has(chat.type ?? '')) return;
+
+  if (!PRESENT.has(u.new_chat_member?.status ?? '')) {
+    await deactivateChat(env.DB, chat.id, now);
+    return;
+  }
+
+  const fresh = await registerChat(env.DB, chat.id, chat.title ?? null, chat.type ?? 'group', now);
+  if (!fresh) return;
+
+  await sendMessage(env.BOT_TOKEN, chat.id, JOINED_TEXT, {
+    replyMarkup: { inline_keyboard: [[{ text: 'На воду', web_app: { url: env.GAME_URL } }]] },
+  });
+  await markGreeted(env.DB, chat.id, now);
 }
 
 export async function handleWebhook(req: Request, env: Env): Promise<Response> {
@@ -38,6 +73,21 @@ export async function handleWebhook(req: Request, env: Env): Promise<Response> {
   }
 
   const update = (await req.json().catch(() => null)) as Update | null;
+  const now = Math.floor(Date.now() / 1000);
+
+  if (update?.my_chat_member) {
+    await handleMembership(update.my_chat_member, env, now);
+    return new Response('ok');
+  }
+
+  // Группа стала супергруппой: без переноса проверка членства молча сломается для всех.
+  const movedTo = update?.message?.migrate_to_chat_id;
+  const movedFrom = update?.message?.chat?.id;
+  if (movedTo && movedFrom) {
+    await migrateChat(env.DB, movedFrom, movedTo, now);
+    return new Response('ok');
+  }
+
   const chatId = update?.message?.chat?.id;
   const text = update?.message?.text?.trim().toLowerCase();
   if (!chatId || !text) return new Response('ok');

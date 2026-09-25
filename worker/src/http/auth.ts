@@ -3,6 +3,20 @@ import { fail } from './envelope';
 import { verifyInitData } from '../telegram/verify';
 import { isChatMember } from '../telegram/api';
 import { upsertPlayer, needsMemberCheck, setMembership, type Player } from '../db/players';
+import { activeChats } from '../db/chats';
+
+/**
+ * Игрок считается своим, если состоит хотя бы в одном чате, куда добавлен бот.
+ * Пока ни один чат не зарегистрирован, работает чат из секрета — это стартовое состояние.
+ */
+async function checkMembership(env: Env, tgId: number): Promise<boolean> {
+  const chats = await activeChats(env.DB);
+  const ids = chats.length ? chats.map((c) => String(c.chat_id)) : [env.CHAT_ID];
+  for (const id of ids) {
+    if (await isChatMember(env.BOT_TOKEN, id, tgId)) return true;
+  }
+  return false;
+}
 
 export type Authorized = { ok: true; player: Player } | { ok: false; res: Response };
 
@@ -21,7 +35,7 @@ export async function authorize(req: Request, env: Env): Promise<Authorized> {
   let player = await upsertPlayer(env.DB, verified.user, now);
 
   if (needsMemberCheck(player.member_checked_at, now)) {
-    const member = await isChatMember(env.BOT_TOKEN, env.CHAT_ID, verified.user.id);
+    const member = await checkMembership(env, verified.user.id);
     await setMembership(env.DB, verified.user.id, member, now);
     player = { ...player, is_member: member ? 1 : 0, member_checked_at: now };
   }
