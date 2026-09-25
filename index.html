@@ -51,7 +51,7 @@
   .sheet button:focus-visible{outline:2px solid var(--kayak)}
   #board{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
   #board h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
-  #brdTabs{display:flex;gap:6px;margin-bottom:14px}
+  #brdTabs{display:flex;gap:6px;margin-bottom:14px;max-width:460px}
   #brdTabs button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:9px 8px;border:0;border-radius:22px;cursor:pointer}
   #brdTabs button.on{background:var(--foam);color:var(--ink)}
   #brdList{list-style:none;margin:0;padding:0;max-width:460px}
@@ -114,7 +114,7 @@
   </div>
 </div>
 <div class="screen hide" id="board">
-  <h2>Кто дальше всех</h2>
+  <h2>Лучшие заплывы</h2>
   <div id="brdTabs">
     <button data-l="easy">Прогулка</button>
     <button data-l="normal">Сплав</button>
