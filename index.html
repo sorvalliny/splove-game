@@ -62,6 +62,8 @@
   #brdList li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #brdList li .pt{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
   #brdList li.empty,#brdList li.gap{opacity:.55;justify-content:center;background:none}
+  #brdList li.apart{margin-top:2px}
+  #board .overBtns{margin-top:18px}
   #brdNote{font-size:13px;opacity:.7;margin:12px 0 0;max-width:460px}
   .overBtns{display:flex;gap:10px;flex-wrap:wrap}
   .overBtns button.ghost{background:rgba(245,241,230,.12);color:var(--foam)}
@@ -96,7 +98,10 @@
     <button data-l="normal">Сплав<span>как задумано</span></button>
     <button data-l="hard">Шторм<span>для опытных</span></button>
   </div>
-  <button id="start">На воду</button>
+  <div class="overBtns">
+    <button id="start">На воду</button>
+    <button id="menuBoard" class="ghost">Рейтинг</button>
+  </div>
 </div>
 <div class="screen hide" id="over">
   <h1 style="font-size:clamp(40px,11vw,90px)">Без вёсел</h1>
@@ -286,8 +291,10 @@ function gameOver(){
   const cont=$('cont');
   cont.style.display=canCont?'':'none';
   if(canCont){
-    cont.textContent='Вернуться в «'+G.lastCamp.name+'»';
-    $('rT').textContent='Осталось возвращений: '+continuesLeft+'. Очки в лагере сохранены.';
+    cont.textContent='Вернуться в «'+G.lastCamp.name+'» ('+continuesLeft+')';
+    $('rT').textContent='Очки, сданные в лагерь, сохранены.';
+  }else if(continuesLeft>0){
+    $('rT').textContent='До лагеря не дошёл — возвращаться некуда. Первый лагерь на 800 метрах.';
   }else{
     $('rT').textContent='';
   }
@@ -537,7 +544,7 @@ function hud(){
   set('oars',G.k.oars.join(''),()=>[...$('oars').children].forEach((e,i)=>e.classList.toggle('lost',!G.k.oars[i])));
   set('hm',Math.round(G.hmel),v=>$('hmel').style.width=v+'%');
   const b=[];if(G.gena>0)b.push('Гена поёт: очки ×2, ещё '+Math.ceil(G.gena)+' с');if(G.capt>0)b.push('Капитан Виктор: путь чист, ещё '+Math.ceil(G.capt)+' с');
-  if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(G.lastCamp&&continuesLeft>0)b.push('Возвращений в лагерь: '+continuesLeft);
+  if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
   set('buff',b.join('|'),()=>$('buff').innerHTML=b.map(s=>'<div>'+s+'</div>').join(''));
 }
 
@@ -576,6 +583,8 @@ function showBest(level) {
 }
 
 globalThis.onLevelPick = showBest;
+
+globalThis.hideMenu = () => document.getElementById('menu').classList.add('hide');
 
 globalThis.updateBest = (level, best) => {
   bests = { ...bests, [level]: best };

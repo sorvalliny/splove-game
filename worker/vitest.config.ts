@@ -12,6 +12,8 @@ export default defineConfig({
         bindings: {
           BOT_TOKEN: '123456:TEST_TOKEN_FOR_TESTS_ONLY',
           CHAT_ID: '-5327135658',
+          WEBHOOK_SECRET: 'test-hook-secret',
+          GAME_URL: 'https://sorvalliny.github.io/splove-game/',
           TEST_MIGRATIONS: migrations,
         },
       },

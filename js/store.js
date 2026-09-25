@@ -36,5 +36,5 @@ export function dropFromQueue(startedAt) {
 
 export const cachedBoard = (level) => read(`${CACHE}.${level}`, null);
 
-export const cacheBoard = (level, board) =>
-  write(`${CACHE}.${level}`, { at: Date.now(), board });
+export const cacheBoard = (level, data) =>
+  write(`${CACHE}.${level}`, { at: Date.now(), data });

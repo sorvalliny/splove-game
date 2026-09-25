@@ -25,3 +25,4 @@ async function call(path, body) {
 export const session = () => call('/api/session');
 export const sendRun = (run) => call('/api/runs', run);
 export const setTrack = (track) => call('/api/profile', { track });
+export const board = (level) => call('/api/board', { level });

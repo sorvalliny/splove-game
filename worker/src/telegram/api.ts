@@ -22,3 +22,29 @@ export async function isChatMember(botToken: string, chatId: string, tgId: numbe
     return false;
   }
 }
+
+interface SendOptions {
+  replyMarkup?: unknown;
+}
+
+/** Отправка сообщения. Ошибки глушатся: молчание бота не должно ронять игру. */
+export async function sendMessage(
+  botToken: string, chatId: number | string, text: string, opts: SendOptions = {},
+): Promise<boolean> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        ...(opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+      }),
+    });
+    const body = (await res.json()) as { ok?: boolean };
+    return body.ok === true;
+  } catch {
+    return false;
+  }
+}

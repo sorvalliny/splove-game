@@ -10,3 +10,4 @@ database_id = "e8b0a65c-fc56-4d53-a236-ac7bea4f775f"
 
 [vars]
 ALLOWED_ORIGIN = "https://sorvalliny.github.io"
+GAME_URL = "https://sorvalliny.github.io/splove-game/"

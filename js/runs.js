@@ -1,7 +1,7 @@
 import { inTelegram } from './auth.js';
-import { sendRun, session } from './api.js';
-import { enqueue, dropFromQueue, queued, cacheBoard, cachedBoard } from './store.js';
-import { renderBoard, showBoard, hideBoard } from './board.js';
+import { sendRun } from './api.js';
+import { enqueue, dropFromQueue, queued, cacheBoard } from './store.js';
+import { openBoard, hideBoard, setMe, currentLevel } from './board.js';
 
 const REJECT_TEXT = {
   too_fast: 'Не засчитано: слишком быстро для байдарки',
@@ -11,40 +11,38 @@ const REJECT_TEXT = {
   daily_limit: 'Не засчитано: на сегодня хватит',
   bad_clock: 'Не засчитано: часы телефона врут',
   bad_numbers: 'Не засчитано: странные числа',
-  bad_level: 'Не засчитано: неизвестный уровень',
+  bad_level: 'Не засчитано: неизвестная сложность',
 };
 
-let me = null;
 let lastLevel = 'easy';
+let cameFrom = 'menu';
 
 const say = (text) => { document.getElementById('rT').textContent = text; };
 
 function resultText(d, run) {
   if (d.rejected) return REJECT_TEXT[d.rejected] ?? 'Результат не засчитан';
-  if (d.isRecord) return `Личный рекорд. ${d.rank}-е место на уровне «${run.levelName}»`;
+  if (d.isRecord) return `Личный рекорд. ${d.rank}-е место на «${run.levelName}»`;
   const miss = d.delta === null ? null : -d.delta;
   const tail = miss && miss > 0 ? `, не хватило ${miss}` : '';
-  return `Лучший результат ${d.best?.bank ?? 0}${tail}. ${d.rank}-е место`;
+  return `Твой рекорд ${d.best?.bank ?? 0}${tail}. ${d.rank}-е место`;
 }
 
-/** Отправляет отложенные заплывы. Порядок важен: сервер проверяет пересечение по времени. */
+/** Отложенные заплывы уходят по возрастанию времени: сервер проверяет пересечение. */
 async function flushQueue() {
   for (const run of [...queued()].sort((a, b) => a.startedAt - b.startedAt)) {
     const r = await sendRun(run);
-    if (r.ok) dropFromQueue(run.startedAt);
-    else if (r.error.code === 'offline') return;
-    else dropFromQueue(run.startedAt);
+    if (!r.ok && r.error.code === 'offline') return;
+    dropFromQueue(run.startedAt);
   }
 }
 
-async function openBoard(level) {
-  const cache = cachedBoard(level);
-  if (cache) renderBoard(level, cache.board, me, cache.at);
-  showBoard();
+function show(level, from) {
+  cameFrom = from;
+  openBoard(level);
 }
 
 export function wireRuns(profile) {
-  me = profile?.id ?? null;
+  setMe(profile?.id ?? null);
 
   globalThis.onRunEnd = async (run) => {
     lastLevel = run.level;
@@ -58,22 +56,26 @@ export function wireRuns(profile) {
       else say(r.error.message);
       return;
     }
-    say(resultText(r.data, run));
-    cacheBoard(run.level, r.data.board);
-    renderBoard(run.level, r.data.board, me);
 
-    // Стартовый экран должен показывать свежий рекорд: игрок уходит туда сразу после заплыва.
-    if (r.data.best) {
-      globalThis.updateBest?.(run.level, r.data.best);
-    }
+    say(resultText(r.data, run));
+    if (r.data.best) globalThis.updateBest?.(run.level, r.data.best);
   };
 
-  document.getElementById('toBoard')?.addEventListener('click', () => openBoard(lastLevel));
-  document.getElementById('brdBack')?.addEventListener('click', hideBoard);
+  document.getElementById('toBoard')?.addEventListener('click', () => show(lastLevel, 'over'));
+  document.getElementById('menuBoard')?.addEventListener('click', () => {
+    globalThis.hideMenu?.();
+    show(globalThis.currentLevel?.() ?? 'easy', 'menu');
+  });
+
+  document.getElementById('brdBack')?.addEventListener('click', () => {
+    hideBoard();
+    if (cameFrom === 'menu') document.getElementById('menu').classList.remove('hide');
+  });
+
   document.querySelectorAll('#brdTabs button').forEach((b) =>
     b.addEventListener('click', () => openBoard(b.dataset.l)));
 
   if (inTelegram()) flushQueue();
 }
 
-export { session };
+export { currentLevel, cacheBoard };

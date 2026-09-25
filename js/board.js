@@ -1,44 +1,72 @@
 import { cachedBoard, cacheBoard } from './store.js';
-
-const LEVEL_NAMES = { easy: 'Прогулка', normal: 'Сплав', hard: 'Шторм' };
+import { board as fetchBoard } from './api.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-const row = (r, place, me) => `
-  <li class="${r.tg_id === me ? 'me' : ''}">
+const row = (r, place, meId) => `
+  <li class="${r.tg_id === meId ? 'me' : ''}">
     <b>${place}</b>
     <span class="nm">${esc(r.name)}</span>
     <span class="pt">${r.bank.toLocaleString('ru')}</span>
   </li>`;
 
-/** Рисует таблицу уровня. Если данных нет — честно говорит, откуда взялись старые. */
-export function renderBoard(level, board, meId, fromCache = null) {
+const meRow = (me) => `
+  <li class="me apart">
+    <b>${me.rank}</b>
+    <span class="nm">Ты</span>
+    <span class="pt">${me.bank.toLocaleString('ru')}</span>
+  </li>`;
+
+let current = 'easy';
+let meId = null;
+
+export const setMe = (id) => { meId = id; };
+export const currentLevel = () => current;
+
+function paint(level, data, staleAt = null) {
   const list = document.getElementById('brdList');
   const note = document.getElementById('brdNote');
+  const { board = [], me = null } = data ?? {};
 
-  if (!board || board.length === 0) {
+  if (board.length === 0) {
     list.innerHTML = '<li class="empty">Здесь пока никто не плавал</li>';
   } else {
     list.innerHTML = board.map((r, i) => row(r, i + 1, meId)).join('');
     const inTop = board.some((r) => r.tg_id === meId);
-    if (!inTop) list.insertAdjacentHTML('beforeend', '<li class="gap">…</li>');
+    if (!inTop && me) list.insertAdjacentHTML('beforeend', `<li class="gap">…</li>${meRow(me)}`);
   }
 
-  note.textContent = fromCache
-    ? `Связи нет. Данные от ${new Date(fromCache).toLocaleString('ru')}`
+  note.textContent = staleAt
+    ? `Связи нет. Данные от ${new Date(staleAt).toLocaleString('ru')}`
     : '';
 
-  document.querySelectorAll('#brdTabs button').forEach((b) =>
-    b.classList.toggle('on', b.dataset.l === level));
+  document.querySelectorAll('#brdTabs button')
+    .forEach((b) => b.classList.toggle('on', b.dataset.l === level));
 }
 
-export function showBoard() {
+/** Сначала показываем кэш, чтобы экран не моргал пустотой, потом обновляем живыми данными. */
+export async function openBoard(level) {
+  current = level;
   document.getElementById('board').classList.remove('hide');
+
+  const cache = cachedBoard(level);
+  if (cache) paint(level, cache.data, null);
+  else paint(level, null);
+
+  const r = await fetchBoard(level);
+  if (current !== level) return;
+
+  if (r.ok) {
+    cacheBoard(level, r.data);
+    paint(level, r.data);
+  } else if (r.error.code === 'offline') {
+    paint(level, cache?.data ?? null, cache?.at ?? Date.now());
+  } else {
+    document.getElementById('brdNote').textContent = r.error.message;
+  }
 }
 
-export function hideBoard() {
-  document.getElementById('board').classList.add('hide');
-}
+export const hideBoard = () => document.getElementById('board').classList.add('hide');
 
-export { LEVEL_NAMES, cachedBoard, cacheBoard };
+export { paint as renderBoard };
