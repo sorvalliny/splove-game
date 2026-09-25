@@ -1,8 +1,9 @@
 import type { Env } from '../index';
-import { ok, fail } from '../http/envelope';
-import { verifyInitData } from '../telegram/verify';
-import { isChatMember } from '../telegram/api';
-import { upsertPlayer, needsMemberCheck, setMembership, type Player } from '../db/players';
+import { ok } from '../http/envelope';
+import { authorize } from '../http/auth';
+import { getBests } from '../db/runs';
+import { getStats } from '../db/stats';
+import type { Player } from '../db/players';
 
 const publicProfile = (p: Player) => ({
   id: p.tg_id,
@@ -13,24 +14,13 @@ const publicProfile = (p: Player) => ({
 });
 
 export async function handleSession(req: Request, env: Env): Promise<Response> {
-  const initData = req.headers.get('x-telegram-init-data');
-  if (!initData) return fail('no_init_data', 'Игра открыта не из Telegram', 401);
+  const auth = await authorize(req, env);
+  if (!auth.ok) return auth.res;
 
-  const verified = await verifyInitData(initData, env.BOT_TOKEN);
-  if (!verified.ok) return fail('bad_init_data', 'Telegram не подтвердил, кто ты', 401);
+  const [bests, stats] = await Promise.all([
+    getBests(env.DB, auth.player.tg_id),
+    getStats(env.DB, auth.player.tg_id),
+  ]);
 
-  const now = Math.floor(Date.now() / 1000);
-  let player = await upsertPlayer(env.DB, verified.user, now);
-
-  if (needsMemberCheck(player.member_checked_at, now)) {
-    const member = await isChatMember(env.BOT_TOKEN, env.CHAT_ID, verified.user.id);
-    await setMembership(env.DB, verified.user.id, member, now);
-    player = { ...player, is_member: member ? 1 : 0, member_checked_at: now };
-  }
-
-  if (!player.is_member) {
-    return fail('not_a_member', 'Рейтинг только для участников чата сплава', 403);
-  }
-
-  return ok({ player: publicProfile(player) });
+  return ok({ player: publicProfile(auth.player), bests, stats });
 }

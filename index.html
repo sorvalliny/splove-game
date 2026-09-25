@@ -48,6 +48,22 @@
   .sheet button span{font-weight:400;opacity:.65;font-size:13px}
   .sheet button.on{background:var(--kayak);color:var(--ink)}.sheet button.on span{opacity:.8}
   .sheet button:focus-visible{outline:2px solid var(--kayak)}
+  #board{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
+  #board h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
+  #brdTabs{display:flex;gap:6px;margin-bottom:14px}
+  #brdTabs button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:9px 8px;border:0;border-radius:22px;cursor:pointer}
+  #brdTabs button.on{background:var(--foam);color:var(--ink)}
+  #brdList{list-style:none;margin:0;padding:0;max-width:460px}
+  #brdList li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
+  #brdList li:nth-child(odd){background:rgba(245,241,230,.05)}
+  #brdList li.me{background:rgba(244,180,26,.18);box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
+  #brdList li b{font-family:"Dela Gothic One",sans-serif;font-weight:400;min-width:28px;opacity:.75}
+  #brdList li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #brdList li .pt{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
+  #brdList li.empty,#brdList li.gap{opacity:.55;justify-content:center;background:none}
+  #brdNote{font-size:13px;opacity:.7;margin:12px 0 0;max-width:460px}
+  .overBtns{display:flex;gap:10px;flex-wrap:wrap}
+  .overBtns button.ghost{background:rgba(245,241,230,.12);color:var(--foam)}
 </style>
 </head>
 <body>
@@ -84,7 +100,21 @@
   <h1 style="font-size:clamp(40px,11vw,90px)">Без вёсел</h1>
   <div class="res"><div><b id="rB">0</b>несгораемая сумма</div><div><b id="rL">0</b>сгорело на воде</div><div><b id="rM">0</b>метров Волги</div></div>
   <p id="rT"></p>
-  <button id="again">Выбрать уровень</button>
+  <div class="overBtns">
+    <button id="again">Выбрать уровень</button>
+    <button id="toBoard" class="ghost">Рейтинг</button>
+  </div>
+</div>
+<div class="screen hide" id="board">
+  <h2>Кто дальше всех</h2>
+  <div id="brdTabs">
+    <button data-l="easy">Прогулка</button>
+    <button data-l="normal">Сплав</button>
+    <button data-l="hard">Шторм</button>
+  </div>
+  <ol id="brdList"></ol>
+  <p id="brdNote"></p>
+  <div class="overBtns"><button id="brdBack">Назад</button></div>
 </div>
 <script>
 (()=>{
@@ -103,6 +133,8 @@ const riverW=s=>Math.min(W*.8,720*U)*(.9+.16*n1(s*.0006+40));
 const cx=s=>{const w=riverW(s),amp=Math.max(0,(W-w)/2-W*.06);return W/2+(fbm(s*.0005)-.5)*2*amp};
 const slope=s=>(cx(s+30)-cx(s-30))/60;
 const M=()=>11*U; // px per metre
+const INSTR_LEAD=()=>200*M(); // за сколько метров до лагеря инструктор выходит навстречу
+const INSTR_LIFE=9;       // столько секунд он на воде и прикрывает от ударов
 
 // ---------- audio engine ----------
 let AC,master,sfxBus,musBus,riverG,kickTimes=[];
@@ -177,15 +209,15 @@ const DIFF={
   easy:{name:'Прогулка',gap:1.9,ramp:14000,loss:.1,inv:2.2,grace:450,barge:3500,hmel:.45,oar:.4,speed:.85,hit:.75},
   normal:{name:'Сплав',gap:1.3,ramp:8000,loss:.2,inv:1.6,grace:250,barge:1500,hmel:.8,oar:.25,speed:1,hit:.9},
   hard:{name:'Шторм',gap:.9,ramp:4500,loss:.3,inv:1.1,grace:120,barge:500,hmel:1.1,oar:.15,speed:1.15,hit:1}};
-let LV='easy';const D=()=>DIFF[LV];
-let hudCache={},G,state='menu',t=0,best=0,paused=false;
+let LV='easy';const D=()=>DIFF[LV];globalThis.currentLevel=()=>LV;
+let hudCache={},G,state='menu',t=0,best=0,paused=false,runStartedAt=0;
 const CAMPS=['Ширяево','Жигули','Самарская Лука','Молодецкий курган','Царёв курган','Усинский залив','Хвалынь'];
 function reset(){
   const s0=Math.random()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
-    onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,
+    onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
     objs:[],camps:[],fx:[],texts:[],npc:null,
-    nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+800*11*U,instrT:18+Math.random()*10};
+    nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+800*11*U,campGap:800*11*U};
   lyric=[];hudCache={};
 }
 reset();
@@ -215,7 +247,7 @@ function spawn(){
   if(G.nGena<ahead){const sd=Math.random()<.5?-1:1;G.objs.push({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+Math.random()*7000)*U}
   if(G.nCapt<ahead){G.objs.push({type:'capt',s:G.nCapt,x:place(Math.random()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+Math.random()*10000)*U}
   if(G.nBoat<ahead){G.objs.push({type:'boat',s:G.nBoat,x:place(Math.random()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(Math.random()<.5?-1:1)*40*U});G.nBoat+=(8000+Math.random()*6000)*U}
-  if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.nCamp+=1000*M()}
+  if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.campGap*=2;G.nCamp+=G.campGap}
 }
 const meters=()=>Math.round((G.k.s-G.k.s0)/M());
 
@@ -236,8 +268,8 @@ addEventListener('keydown',e=>{const k=e.key;
   if(k==='ArrowUp'||k==='w'||k==='ц'){steer(-1);steer(1)}
   if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();start()}
   if(k==='m'||k==='ь')toggleSheet()});
-function start(){audio();if(AC.state==='suspended')AC.resume();reset();G.tip=7;state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
-$('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))});
+function start(){audio();if(AC.state==='suspended')AC.resume();reset();G.tip=7;runStartedAt=Date.now();state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
+$('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
 $('start').onclick=start;$('again').onclick=()=>{$('over').classList.add('hide');$('menu').classList.remove('hide');state='menu'};
 function toggleSheet(){const o=$('sheet').classList.toggle('open');paused=o&&state==='play';audio();if(AC.state==='suspended')AC.resume();markTrack()}
 function markTrack(){[...$('sheet').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.t===MUS.track));$('trk').textContent=G.gena>0?'Гена на гитаре':TR[MUS.track].name}
@@ -246,8 +278,13 @@ $('sheet').querySelectorAll('button').forEach(b=>b.onclick=()=>{MUS.track=b.data
 function gameOver(){
   state='over';const m=meters();best=Math.max(best,G.bank);
   $('rB').textContent=G.bank;$('rL').textContent=G.onb;$('rM').textContent=m;
-  $('rT').textContent=G.bank>0&&G.bank>=best?'Лучшая несгораемая сумма за сессию. Лагерь гордится.':'Рекорд сессии: '+best+'. Уровень «'+D().name+'». Вёсла выловили, можно снова.';
+  $('rT').textContent='';
   $('over').classList.remove('hide');
+  globalThis.onRunEnd?.({
+    level:LV, bank:Math.round(G.bank), onboard:Math.round(G.onb), meters:m,
+    durationMs:Date.now()-runStartedAt, oarsLost:G.oarsLost, startedAt:runStartedAt,
+    levelName:D().name,
+  });
 }
 
 // ---------- helpers ----------
@@ -258,7 +295,7 @@ function puff(x,s){for(let i=0;i<14;i++){const a=Math.random()*6.28,v=(30+Math.r
 function hit(o){
   const k=G.k;if(k.inv>0)return;k.inv=D().inv;sfx.hit();G.shake=12;G.flash=.35;
   const have=k.oars.map((v,i)=>v?i:-1).filter(i=>i>=0);
-  if(have.length){const i=have[Math.floor(Math.random()*have.length)];k.oars[i]=0;G.objs.push({type:'lostoar',x:k.x+(i-1)*14*U,s:k.s,seed:Math.random()*9,vx:(Math.random()-.5)*60*U,life:3})}
+  if(have.length){const i=have[Math.floor(Math.random()*have.length)];k.oars[i]=0;G.oarsLost++;G.objs.push({type:'lostoar',x:k.x+(i-1)*14*U,s:k.s,seed:Math.random()*9,vx:(Math.random()-.5)*60*U,life:3})}
   if(G.instr>0)floatT('инструктор прикрыл',k.x,k.s+70*U,'#9fe0c8');
   else{const lost=Math.round(G.onb*D().loss);G.onb-=lost;G.burned+=lost;floatT('весло за борт  −'+lost,k.x,k.s+70*U,'#ff9c85')}
   if(oarCount()===0){state='dying';setTimeout(gameOver,1100)}
@@ -315,8 +352,11 @@ function update(dt){
   for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   // instructor
-  G.instrT-=dt;if(G.instrT<=0&&!G.npc){const sd=Math.random()<.5?-1:1;G.npc={side:sd,x:sd<0?-60*U:W+60*U,ds:150*U,life:8};G.instr=8;sfx.shout();G.instrT=35+Math.random()*25}
-  if(G.npc){const n=G.npc;n.life-=dt;n.x+=-n.side*(W+120*U)/8*dt;if(n.life<=0)G.npc=null}
+  // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
+  // раньше два независимых расписания расходились и он кричал посреди пустой реки.
+  if(!G.npc){const cp=G.camps.find(c=>!c.done&&!c.guided&&k.s>c.s-INSTR_LEAD()&&k.s<c.s);
+    if(cp){cp.guided=1;G.npc={side:-1,x:-60*U,s:cp.s-120*U,life:INSTR_LIFE};G.instr=INSTR_LIFE;sfx.shout()}}
+  if(G.npc){const n=G.npc;n.life-=dt;n.x+=(W+120*U)/INSTR_LIFE*dt;if(n.life<=0||n.s<k.s-H*.3)G.npc=null}
   if(AC)riverG.gain.value=lerp(riverG.gain.value,.05+(G.tow>0?.08:0),dt*2);
 }
 
@@ -443,7 +483,7 @@ function draw(rdt){
   G.objs.filter(o=>!o.pick||o.type==='oar').forEach(drawObj);G.objs.filter(o=>o.pick&&o.type!=='oar').forEach(drawObj);
   drawKayak();
   // instructor
-  if(G.npc){const n=G.npc,ny=RY-n.ds;ctx.save();ctx.translate(n.x,ny);ctx.rotate(-n.side*Math.PI/2);ctx.fillStyle='#d9442b';ctx.beginPath();ctx.ellipse(0,0,9*U,34*U,0,0,6.28);ctx.fill();
+  if(G.npc){const n=G.npc,ny=sy(n.s);ctx.save();ctx.translate(n.x,ny);ctx.rotate(-n.side*Math.PI/2);ctx.fillStyle='#d9442b';ctx.beginPath();ctx.ellipse(0,0,9*U,34*U,0,0,6.28);ctx.fill();
     ctx.fillStyle='#16262a';ctx.beginPath();ctx.arc(0,0,5*U,0,6.28);ctx.fill();ctx.save();ctx.rotate(Math.sin(t*9)*.6);ctx.strokeStyle='#2b3a3f';ctx.lineWidth=2*U;ctx.beginPath();ctx.moveTo(-24*U,0);ctx.lineTo(24*U,0);ctx.stroke();ctx.restore();ctx.restore();
     speech(n.x,ny-24*U,'Гребная, турииисты!',Math.min(1,n.life));}
   for(const f of G.fx){if(f.ring)continue;const yy=sy(f.s)-f.z;ctx.fillStyle=f.puff?`rgba(245,241,230,${f.life*.6})`:`rgba(245,241,230,${Math.min(1,f.life*1.4)})`;ctx.beginPath();ctx.arc(f.x,yy,(f.puff?(8-f.life*5)*U:(1.4+f.z/(40*U))*U),0,6.28);ctx.fill()}
@@ -488,15 +528,42 @@ requestAnimationFrame(frame);
 <script type="module">
 import { ready, inTelegram } from './js/auth.js';
 import { session } from './js/api.js';
+import { wireRuns } from './js/runs.js';
 
 ready();
 
+const by = document.getElementById('by');
+let bests = {};
+
+const LEVEL_NAMES = { easy: 'Прогулке', normal: 'Сплаве', hard: 'Шторме' };
+
+function showBest(level) {
+  const b = bests?.[level];
+  if (!b) return;
+  by.textContent = `Твой рекорд на ${LEVEL_NAMES[level]}: ${b.bank.toLocaleString('ru')}`;
+}
+
+globalThis.onLevelPick = showBest;
+
 if (inTelegram()) {
-  const by = document.getElementById('by');
   const r = await session();
-  if (r.ok) by.textContent = `${r.data.player.name}, добро пожаловать на воду`;
-  else if (r.error.code === 'not_a_member') by.textContent = 'Рейтинг только для участников чата сплава';
-  else if (r.error.code === 'offline') by.textContent = 'Связи нет, играем без рейтинга';
+  if (r.ok) {
+    bests = r.data.bests ?? {};
+    const st = r.data.stats;
+    by.textContent = st?.runs
+      ? `${r.data.player.name}. Заплывов: ${st.runs}, Волги пройдено: ${st.meters.toLocaleString('ru')} м`
+      : `${r.data.player.name}, добро пожаловать на воду`;
+    showBest(globalThis.currentLevel?.() ?? 'easy');
+    wireRuns(r.data.player);
+  } else if (r.error.code === 'not_a_member') {
+    by.textContent = 'Рейтинг только для участников чата сплава';
+    wireRuns(null);
+  } else {
+    by.textContent = 'Связи нет, играем без рейтинга';
+    wireRuns(null);
+  }
+} else {
+  wireRuns(null);
 }
 </script>
 </body>
