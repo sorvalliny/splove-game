@@ -339,7 +339,7 @@ function collect(o){
   if(o.type==='wine'){G.onb+=100*mult;G.hmel=Math.min(100,G.hmel+26);sfx.bottle();floatT('вино +'+100*mult,o.x,o.s)}
   if(o.type==='teq'){G.onb+=180*mult;G.hmel=Math.min(100,G.hmel+42);k.F+=70*U;sfx.bottle();floatT('текила +'+180*mult,o.x,o.s)}
   if(o.type==='oar'){const i=k.oars.indexOf(0);if(i>=0){k.oars[i]=1;floatT('весло выловили',o.x,o.s)}else{G.onb+=30;floatT('запасное +30',o.x,o.s)}sfx.pick(3)}
-  if(o.type==='gena'){G.gena=22;G.lyr=0;sfx.pick(4);floatT('Гена на борту!',o.x,o.s,'#f4b41a');markTrack()}
+  if(o.type==='gena'){G.gena=22;G.lyr=0;sfx.pick(4);const extra=continuesLeft<CONTINUES+2;if(extra)continuesLeft++;floatT(extra?'Гена на борту! +1 возвращение':'Гена на борту!',o.x,o.s,'#f4b41a');markTrack()}
   if(o.type==='capt'){G.capt=9;sfx.horn();floatT('Капитан Виктор ведёт!',k.x,k.s+120*U,'#f4b41a');
     G.objs.forEach(b=>{if(!b.pick&&b.type!=='lostoar'&&Math.abs(b.s-k.s)<H*1.6){b.dead=1;puff(b.x,b.s)}})}
   if(o.type==='boat'){G.tow=10;G.towX=o.x;sfx.motor();floatT('Катер зацепил!',k.x,k.s+120*U,'#f4b41a')}
@@ -537,7 +537,7 @@ function hud(){
   set('oars',G.k.oars.join(''),()=>[...$('oars').children].forEach((e,i)=>e.classList.toggle('lost',!G.k.oars[i])));
   set('hm',Math.round(G.hmel),v=>$('hmel').style.width=v+'%');
   const b=[];if(G.gena>0)b.push('Гена поёт: очки ×2, ещё '+Math.ceil(G.gena)+' с');if(G.capt>0)b.push('Капитан Виктор: путь чист, ещё '+Math.ceil(G.capt)+' с');
-  if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');
+  if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(G.lastCamp&&continuesLeft>0)b.push('Возвращений в лагерь: '+continuesLeft);
   set('buff',b.join('|'),()=>$('buff').innerHTML=b.map(s=>'<div>'+s+'</div>').join(''));
 }
 
