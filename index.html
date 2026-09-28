@@ -49,17 +49,17 @@
   .boosterRow{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
   .screen .boosterRow button{font:600 13px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:7px 12px;border-radius:18px;box-shadow:none}
   .screen .boosterRow button.on{background:var(--kayak);color:var(--ink)}
-  #seasonScreen{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
-  #seasonScreen h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
-  #seasonScreen h3{font-size:13px;opacity:.7;margin:18px 0 8px;font-weight:600}
-  #seasonScreen .q{max-width:460px;margin:0 0 10px;padding:11px 14px;border-radius:14px;background:rgba(245,241,230,.07)}
-  #seasonScreen .q.done{box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
-  #seasonScreen .sTitle{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:15px}
-  #seasonScreen b{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
-  #seasonScreen .sBar{height:6px;border-radius:3px;background:rgba(245,241,230,.18);margin:8px 0 6px;overflow:hidden}
-  #seasonScreen .sBar i{display:block;height:100%;background:var(--kayak);border-radius:3px}
-  #seasonScreen small{opacity:.8;font-size:13px}
-  #seasonScreen .sNote{font-size:14px;opacity:.75;margin:0}
+  #board{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
+  #board h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
+  #board h3{font-size:13px;opacity:.7;margin:18px 0 8px;font-weight:600}
+  #board .q{max-width:460px;margin:0 0 10px;padding:11px 14px;border-radius:14px;background:rgba(245,241,230,.07)}
+  #board .q.done{box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
+  #board .sTitle{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:15px}
+  #board b{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
+  #board .sBar{height:6px;border-radius:3px;background:rgba(245,241,230,.18);margin:8px 0 6px;overflow:hidden}
+  #board .sBar i{display:block;height:100%;background:var(--kayak);border-radius:3px}
+  #board small{opacity:.8;font-size:13px}
+  #board .sNote{font-size:14px;opacity:.75;margin:0}
   #seasonBoard,#seasonWeek{list-style:none;margin:0;padding:0;max-width:460px}
   #seasonWeek li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
   #seasonWeek li:nth-child(odd){background:rgba(245,241,230,.05)}
@@ -106,6 +106,12 @@
   #brdList li.empty,#brdList li.gap{opacity:.55;justify-content:center;background:none}
   #brdList li.apart{margin-top:2px}
   #board .overBtns{margin-top:18px}
+  #rTabs{display:flex;gap:6px;margin-bottom:14px;max-width:460px}
+  #rTabs button{flex:1;font:600 15px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:10px 8px;border:0;border-radius:22px;cursor:pointer}
+  #rTabs button.on{background:var(--kayak);color:var(--ink)}
+  #board [hidden]{display:none}
+  #board .sPrize{font-size:14px;margin:0 0 6px;color:var(--kayak)}
+  #board .sMe{font-size:15px;margin:0 0 4px}
   #brdNote{font-size:13px;opacity:.7;margin:12px 0 0;max-width:460px}
   .overBtns{display:flex;gap:10px;flex-wrap:wrap}
   .overBtns button.ghost{background:rgba(245,241,230,.12);color:var(--foam)}
@@ -159,31 +165,41 @@
     <button id="toBoard" class="ghost">Рейтинг</button>
   </div>
 </div>
-<div class="screen hide" id="seasonScreen">
-  <h2>Сезон</h2>
-  <h3>Задания недели</h3>
-  <div id="seasonQuests"></div>
-  <h3>Таблица по баллам</h3>
-  <ol id="seasonBoard"></ol>
-  <h3>Заплыв недели</h3>
-  <ol id="seasonWeek"></ol>
-  <div id="seasonChamps"></div>
-  <div class="overBtns" style="margin-top:18px"><button id="seasonBack">Назад</button></div>
-</div>
 <div class="screen hide" id="board">
-  <h2>Лучшие заплывы</h2>
-  <div id="brdKind">
-    <button data-k="points" class="on">Очки</button>
-    <button data-k="time">Время</button>
+  <h2>Рейтинг</h2>
+  <div id="rTabs">
+    <button data-t="season" class="on">Сезон</button>
+    <button data-t="week">Неделя</button>
+    <button data-t="records">Рекорды</button>
   </div>
-  <div id="brdTabs">
-    <button data-l="easy">Прогулка</button>
-    <button data-l="normal">Сплав</button>
-    <button data-l="hard">Шторм</button>
+  <div id="panSeason">
+    <p class="sPrize">Призы на сплаве в конце лета: 1-е место −15%, 2-е −10%, 3-е −5%</p>
+    <p class="sMe" id="seasonMe"></p>
+    <h3>Задания недели</h3>
+    <div id="seasonQuests"></div>
+    <h3>Таблица по баллам</h3>
+    <ol id="seasonBoard"></ol>
+    <p class="sNote">Баллы дают задания недели, заплыв недели (+50 за участие, +300/200/100 за места), первый финиш недели на каждой сложности (+100) и первый личный рекорд недели на ней (+50).</p>
+    <div id="seasonChamps"></div>
   </div>
-  <ol id="brdList"></ol>
-  <p id="brdNote"></p>
-  <div class="overBtns"><button id="brdBack">Назад</button></div>
+  <div id="panWeek" hidden>
+    <p class="sMe" id="weekInfo"></p>
+    <ol id="seasonWeek"></ol>
+  </div>
+  <div id="panRecords" hidden>
+    <div id="brdKind">
+      <button data-k="points" class="on">Очки</button>
+      <button data-k="time">Время</button>
+    </div>
+    <div id="brdTabs">
+      <button data-l="easy">Прогулка</button>
+      <button data-l="normal">Сплав</button>
+      <button data-l="hard">Шторм</button>
+    </div>
+    <ol id="brdList"></ol>
+    <p id="brdNote"></p>
+  </div>
+  <div class="overBtns" style="margin-top:18px"><button id="brdBack">Назад</button></div>
 </div>
 <script>
 (()=>{
@@ -392,7 +408,7 @@ addEventListener('keydown',e=>{const k=e.key;
   if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();if(!overlayOpen())begin('free')}
   if(k==='m'||k==='ь')toggleSheet()});
 // Экраны «Сезон» и «Рейтинг» лежат поверх меню: Enter и Пробел под ними не должны запускать заплыв.
-const overlayOpen=()=>['seasonScreen','board'].some(id=>{const el=$(id);return el&&!el.classList.contains('hide')});
+const overlayOpen=()=>['board'].some(id=>{const el=$(id);return el&&!el.classList.contains('hide')});
 let runMode='free',runWeek=null,starting=false,pickedLV=null; // pickedLV: сложность, выбранная игроком, пока идёт заплыв недели
 /** Начало заплыва без звука: режим «неделя» берёт зерно и сложность из недели, бустер применяется к этому заплыву. */
 function beginRun(mode,boost){
@@ -815,6 +831,7 @@ import { session } from './js/api.js';
 import { wireRuns } from './js/runs.js';
 import { initSeason } from './js/season.js';
 import { initWeek } from './js/week.js';
+import { initRating } from './js/rating.js';
 
 ready();
 
@@ -859,6 +876,7 @@ if (inTelegram()) {
   wireRuns(null);
 }
 
+initRating();
 initWeek();
 initSeason();
 </script>

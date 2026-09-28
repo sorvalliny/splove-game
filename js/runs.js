@@ -2,7 +2,7 @@ import { inTelegram } from './auth.js';
 import { sendRun } from './api.js';
 import { enqueue, dropFromQueue, queued, cacheBoard } from './store.js';
 import { formatTime } from './season-format.js';
-import { openBoard, hideBoard, setMe, currentLevel } from './board.js';
+import { openBoard, setMe, currentLevel } from './board.js';
 
 const REJECT_TEXT = {
   too_fast: 'Не засчитано: слишком быстро для байдарки',
@@ -17,7 +17,7 @@ const REJECT_TEXT = {
 
 let lastLevel = 'easy';
 let lastKind = 'points';
-let cameFrom = 'menu';
+let lastMode = 'free';
 
 const say = (text) => { document.getElementById('rT').textContent = text; };
 
@@ -62,9 +62,12 @@ async function flushQueue() {
   }
 }
 
+/** После заплыва недели «Рейтинг» открывается на неделе, после обычного — на рекордах его сложности. */
 function show(level, from, kind) {
-  cameFrom = from;
-  openBoard(level, kind);
+  const open = globalThis.openRating;
+  if (!open) return openBoard(level, kind);
+  if (from === 'over') return open({ tab: lastMode === 'week' ? 'week' : 'records', level, kind, from });
+  return open({ tab: 'season', level, from });
 }
 
 export function wireRuns(profile) {
@@ -73,6 +76,7 @@ export function wireRuns(profile) {
   globalThis.onRunEnd = async (run) => {
     lastLevel = run.level;
     lastKind = run.finished ? 'time' : 'points'; // после финиша «Рейтинг» открывается на времени
+    lastMode = run.mode ?? 'free';
     if (!inTelegram()) { say('Рейтинг доступен, если открыть игру через бота'); return; }
 
     say('Отправляем результат…');
@@ -95,11 +99,6 @@ export function wireRuns(profile) {
   document.getElementById('menuBoard')?.addEventListener('click', () => {
     globalThis.hideMenu?.();
     show(globalThis.currentLevel?.() ?? 'easy', 'menu');
-  });
-
-  document.getElementById('brdBack')?.addEventListener('click', () => {
-    hideBoard();
-    if (cameFrom === 'menu') document.getElementById('menu').classList.remove('hide');
   });
 
   document.querySelectorAll('#brdTabs button').forEach((b) =>
