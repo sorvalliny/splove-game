@@ -1,6 +1,7 @@
 import { inTelegram } from './auth.js';
 import { season as fetchSeason } from './api.js';
 import { formatCountdown } from './season-format.js';
+import { questsHtml, boardHtml, champsHtml } from './season-render.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -86,11 +87,38 @@ async function load() {
   }
 }
 
+const screen = () => document.getElementById('seasonScreen');
+
+/** Экран «Сезон»: задания недели, таблица по баллам, титулы. Данные берём свежие, показываем кэш сразу. */
+async function openScreen() {
+  const el = screen();
+  if (!el || !data) return;
+  document.getElementById('menu')?.classList.add('hide');
+  el.classList.remove('hide');
+  paintScreen();
+  await load();
+  paintScreen();
+}
+
+function paintScreen() {
+  if (!data) return;
+  document.getElementById('seasonQuests').innerHTML = questsHtml(data.quests);
+  document.getElementById('seasonBoard').innerHTML = boardHtml(data.board);
+  document.getElementById('seasonChamps').innerHTML = champsHtml(data.champions);
+}
+
+function closeScreen() {
+  screen()?.classList.add('hide');
+  document.getElementById('menu')?.classList.remove('hide');
+}
+
 /** Баллы и место меняются после заплыва: игра вызывает это, чтобы карточка не устаревала. */
 export const refreshSeason = () => (inTelegram() ? load() : Promise.resolve());
 globalThis.refreshSeason = refreshSeason;
 
 export async function initSeason() {
   if (!inTelegram()) return;
+  card()?.addEventListener('click', openScreen);
+  document.getElementById('seasonBack')?.addEventListener('click', closeScreen);
   await load();
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // auth.js читает Telegram при загрузке модуля, поэтому заглушки ставим до импорта.
 globalThis.Telegram = { WebApp: { initData: 'x', ready() {}, expand() {} } };
-const el = { hidden: true, innerHTML: '' };
+const el = { hidden: true, innerHTML: '', addEventListener() {} };
 const timerEl = { textContent: '' };
 globalThis.document = {
   getElementById: (id) => (id === 'seasonCard' ? el : id === 'seasonTimer' ? timerEl : null),
