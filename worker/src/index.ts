@@ -3,6 +3,7 @@ import { handleSession } from './routes/session';
 import { handleRuns } from './routes/runs';
 import { handleProfile } from './routes/profile';
 import { handleBoard } from './routes/board';
+import { handleSeason } from './routes/season';
 import { handleWebhook } from './routes/webhook';
 
 export interface Env {
@@ -23,6 +24,7 @@ const ROUTES: Record<string, Handler> = {
   '/api/runs': handleRuns,
   '/api/profile': handleProfile,
   '/api/board': handleBoard,
+  '/api/season': handleSeason,
 };
 
 export default {
