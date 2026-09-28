@@ -16,6 +16,7 @@ const REJECT_TEXT = {
 };
 
 let lastLevel = 'easy';
+let lastKind = 'points';
 let cameFrom = 'menu';
 
 const say = (text) => { document.getElementById('rT').textContent = text; };
@@ -61,9 +62,9 @@ async function flushQueue() {
   }
 }
 
-function show(level, from) {
+function show(level, from, kind) {
   cameFrom = from;
-  openBoard(level);
+  openBoard(level, kind);
 }
 
 export function wireRuns(profile) {
@@ -71,6 +72,7 @@ export function wireRuns(profile) {
 
   globalThis.onRunEnd = async (run) => {
     lastLevel = run.level;
+    lastKind = run.finished ? 'time' : 'points'; // после финиша «Рейтинг» открывается на времени
     if (!inTelegram()) { say('Рейтинг доступен, если открыть игру через бота'); return; }
 
     say('Отправляем результат…');
@@ -89,7 +91,7 @@ export function wireRuns(profile) {
     globalThis.refreshWeek?.();
   };
 
-  document.getElementById('toBoard')?.addEventListener('click', () => show(lastLevel, 'over'));
+  document.getElementById('toBoard')?.addEventListener('click', () => show(lastLevel, 'over', lastKind));
   document.getElementById('menuBoard')?.addEventListener('click', () => {
     globalThis.hideMenu?.();
     show(globalThis.currentLevel?.() ?? 'easy', 'menu');

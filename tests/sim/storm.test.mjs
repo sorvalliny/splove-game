@@ -125,3 +125,22 @@ test('выше ступень — сильнее порыв', () => {
   assert.ok(drift(10) > drift(0), 'на 10-й ступени ветер сильнее');
   assert.ok(t.G.storm);
 });
+
+test('в тот же тик, когда время вышло, финиша нет: побеждает лимит времени', () => {
+  const { t, sent } = boot('hard', 5);
+  t.setSimT(329.9995);
+  t.G.finishAt = t.G.k.s + 0.001;     // линия сразу за носом: пересечётся в этом же шаге
+  t.G.objs = [];
+  t.update(t.SIM_DT * 2);             // simT переходит 330 и линия пересекается в одном тике
+  assert.equal(t.state, 'over');
+  assert.equal(sent[0].finished, false);
+});
+
+test('предупреждение о порыве называет сторону, откуда дует: снос вправо — порыв слева', () => {
+  const { t } = boot('hard', 3);
+  const g = t.G.storm.gusts[0];
+  while (t.simT < g.start - 1.4) { t.G.objs = []; t.update(t.SIM_DT); }
+  const text = t.G.texts.map((x) => x.s).join('|');
+  assert.match(text, g.dir > 0 ? /Порыв слева/ : /Порыв справа/);
+});
+

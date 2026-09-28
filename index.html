@@ -438,7 +438,7 @@ function windNow(){
 function stormTick(){
   const st=G.storm;if(!st||state!=='play')return;
   const next=st.gusts[st.warned+1];
-  if(next&&simT>=next.start-STORM.warnSec){st.warned++;floatT('Порыв '+(next.dir<0?'слева':'справа'),G.k.x,G.k.s+110*U,'#9fd0ff');sfx.gust()}
+  if(next&&simT>=next.start-STORM.warnSec){st.warned++;floatT('Порыв '+(next.dir<0?'справа':'слева'),G.k.x,G.k.s+110*U,'#9fd0ff');sfx.gust()}
   if(!G.finished&&simT>=STORM.limitSec)timeUp()}
 /** Время «Шторма» вышло: заплыв заканчивается без финиша, очки на воде сдаются, в «Время» он не попадает. */
 function timeUp(){
@@ -583,8 +583,8 @@ function update(dt){
   // camps
   for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.boostX2=0;G.keep=G.keep.filter(x=>x.s>cp.s);G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
+  stormTick(); // лимит времени раньше финиша: в тик, где время вышло, финиша уже нет
   if(state==='play'&&!G.finished&&k.s>=G.finishAt)finishLine();
-  stormTick();
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
   // раньше два независимых расписания расходились и он кричал посреди пустой реки.
@@ -768,7 +768,7 @@ function draw(rdt){
   lyric=lyric.filter(l=>!AC||AC.currentTime-l.t<3);
   for(const x of G.texts){const a=Math.min(1,x.life*2),yy=sy(x.ws)-(1.3-x.life)*30*U;ctx.font=`700 ${15*U+4}px Onest,sans-serif`;ctx.textAlign='center';ctx.fillStyle=`rgba(22,38,42,${a*.5})`;ctx.fillText(x.s,x.x+1.5,yy+1.5);ctx.globalAlpha=a;ctx.fillStyle=x.col||'#f5f1e6';ctx.fillText(x.s,x.x,yy);ctx.globalAlpha=1}
   ctx.restore();
-  if(G.storm)drawRain();
+  if(G.storm&&state!=='menu')drawRain();
   // golden evening light
   const lg=ctx.createLinearGradient(W,0,0,H);lg.addColorStop(0,'rgba(255,200,120,.2)');lg.addColorStop(.6,'rgba(255,200,120,0)');lg.addColorStop(1,'rgba(30,40,70,.15)');ctx.fillStyle=lg;ctx.fillRect(0,0,W,H);
   if(G.hmel>30){const vg=ctx.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.8);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(120,40,60,${(G.hmel-30)/70*.35})`);ctx.fillStyle=vg;ctx.fillRect(0,0,W,H)}

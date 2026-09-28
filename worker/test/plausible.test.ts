@@ -78,12 +78,14 @@ describe('правдоподобие заплыва', () => {
     expect(checkRun({ ...good, durationMs: 1e12, meters: 10 }, now)).toBe('bad_numbers');
   });
 
-  // Лимит «Шторма» 330 секунд: заплыв длиннее лимита с запасом на связь не мог быть сыгран как есть.
-  it('«Шторм» дольше 335 секунд отклоняется, другие сложности нет', () => {
-    const long = { ...good, durationMs: 400_000, startedAt: now - 400_000, meters: 1000 };
-    expect(checkRun({ ...long, level: 'hard' }, now)).toBe('bad_numbers');
-    expect(checkRun({ ...long, level: 'normal' }, now)).toBeNull();
-    const ok = { ...good, level: 'hard' as const, durationMs: 335_000, startedAt: now - 335_000, meters: 1000 };
-    expect(checkRun(ok, now)).toBeNull();
+  // Лимит «Шторма» 330 секунд считается временем игры, а durationMs идёт по часам телефона:
+  // паузы, смерти и экран возврата в лагерь добавляют время, поэтому запас щедрый (5 минут).
+  it('«Шторм» с паузами и возвратами (до 630 секунд по часам) принимается, дольше нет', () => {
+    const at = (ms: number, level: 'hard' | 'normal') =>
+      ({ ...good, level, durationMs: ms, startedAt: now - ms, meters: 1000 });
+    expect(checkRun(at(400_000, 'hard'), now)).toBeNull();
+    expect(checkRun(at(630_000, 'hard'), now)).toBeNull();
+    expect(checkRun(at(630_001, 'hard'), now)).toBe('bad_numbers');
+    expect(checkRun(at(700_000, 'normal'), now)).toBeNull();
   });
 });

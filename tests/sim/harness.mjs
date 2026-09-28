@@ -28,6 +28,7 @@ export function loadGame(file = INDEX_HTML, { weekInfo = null } = {}) {
     get state(){ return state },
     get held(){ return held },
     get simT(){ return simT },
+    setSimT(v){ simT = v },
     get FINISH_M(){ return typeof FINISH_M === 'undefined' ? null : FINISH_M },
     get level(){ return LV },
     setState(v){ state = v },

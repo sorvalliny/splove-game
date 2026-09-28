@@ -167,20 +167,16 @@ export interface TimeRow { tg_id: number; name: string; photo_url: string | null
 export async function applyBestTime(
   db: D1Database, tgId: number, level: Level, timeMs: number, runId: number, now: number,
 ): Promise<boolean> {
-  const prev = await db
-    .prepare('SELECT time_ms FROM best_times WHERE tg_id = ? AND level = ?')
-    .bind(tgId, level)
-    .first<{ time_ms: number }>();
-  if (prev && timeMs >= prev.time_ms) return false;
-
-  await db
+  // Одним запросом: два одновременных заплыва не перезапишут лучшее время худшим.
+  const res = await db
     .prepare(
       `INSERT INTO best_times (tg_id, level, time_ms, run_id, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
-       ON CONFLICT(tg_id, level) DO UPDATE SET time_ms = ?3, run_id = ?4, updated_at = ?5`,
+       ON CONFLICT(tg_id, level) DO UPDATE SET time_ms = ?3, run_id = ?4, updated_at = ?5
+       WHERE excluded.time_ms < best_times.time_ms`,
     )
     .bind(tgId, level, timeMs, runId, now)
     .run();
-  return true;
+  return res.meta.changes === 1;
 }
 
 export async function getBestTimes(

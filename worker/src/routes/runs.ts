@@ -111,7 +111,15 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
         : { points: 0, booster: null };
       return ok(await weekOutcome(env, tgId, known.week, known.bank, known.rejected as Rejection | null, false, owed, weekly));
     }
-    const knownFinish = known.finished === 1 && known.time_ms !== null ? { timeMs: known.time_ms, isRecord: false } : null;
+    // Первый запрос мог оборваться и до записи рекорда времени: довозим его (только для обычных заплывов).
+    const knownFinish = known.finished === 1 && known.time_ms !== null
+      ? {
+          timeMs: known.time_ms,
+          isRecord: known.mode === 'free'
+            ? await applyBestTime(env.DB, tgId, known.level, known.time_ms, known.id, known.created_at)
+            : false,
+        }
+      : null;
     return ok(await outcome(env, tgId, known.level, known.bank, known.rejected as Rejection | null, false, owed, knownFinish));
   }
 

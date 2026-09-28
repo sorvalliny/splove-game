@@ -302,8 +302,27 @@ describe('финиш и время', () => {
     expect(await bestTime()).toBeNull();
   });
 
-  it('«Шторм» дольше 335 секунд целиком отклоняется как странные числа', async () => {
-    const d = (await (await sendRun({ level: 'hard', durationMs: 400_000, meters: 1000, startedAt: Date.now() - 400_000 })).json<any>()).data;
-    expect(d.rejected).toBe('bad_numbers');
+  it('«Шторм» с паузами (400 секунд по часам) принимается, а 700 секунд отклоняется', async () => {
+    const t = Date.now();
+    const ok = (await (await sendRun({ level: 'hard', durationMs: 400_000, meters: 1000, startedAt: t - 900_000 })).json<any>()).data;
+    expect(ok.rejected).toBeNull();
+    const bad = (await (await sendRun({ level: 'hard', durationMs: 700_000, meters: 1000, startedAt: t - 300_000 })).json<any>()).data;
+    expect(bad.rejected).toBe('bad_numbers');
+  });
+
+  // Запрос мог оборваться между записью заплыва и записью рекорда: повтор довозит рекорд времени.
+  it('повтор после обрыва записывает рекорд времени', async () => {
+    const { upsertPlayer } = await import('../src/db/players');
+    const { insertRun } = await import('../src/db/runs');
+    await upsertPlayer(env.DB, { id: 956875, first_name: 'Виктор' }, 1000);
+    const startedAt = Date.now() - 200_000;
+    await insertRun(env.DB, {
+      tgId: 956875, level: 'normal', bank: 900, onboard: 0, meters: 4000, durationMs: 200_000, oarsLost: 0,
+      startedAt, rejected: null, finished: true, timeMs: 195_000,
+    }, Math.floor(Date.now() / 1000));
+    expect(await bestTime()).toBeNull();
+    const d = (await (await finishRun({ startedAt })).json<any>()).data;
+    expect(d.finish).toEqual({ timeMs: 195_000, isRecord: true, rank: 1 });
+    expect((await bestTime()).time_ms).toBe(195_000);
   });
 });

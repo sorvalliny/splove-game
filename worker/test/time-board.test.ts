@@ -46,6 +46,23 @@ describe('рекорды времени', () => {
     expect(await finish(1, 190_000, 5000)).toBe(true);
   });
 
+  it('две одновременные записи не портят рекорд: остаётся лучшее время', async () => {
+    const mk = (startedAt: number, timeMs: number) => insertRun(env.DB, {
+      tgId: 1, level: 'normal', bank: 1, onboard: 0, meters: 4000, durationMs: 250_000, oarsLost: 0,
+      startedAt, rejected: null, finished: true, timeMs,
+    }, 2000);
+    const a = await mk(5_000_000, 200_000);
+    const b = await mk(6_000_000, 190_000);
+    await Promise.all([
+      applyBestTime(env.DB, 1, 'normal', 200_000, a, 2000),
+      applyBestTime(env.DB, 1, 'normal', 190_000, b, 2000),
+    ]);
+    const best = () => env.DB.prepare('SELECT time_ms FROM best_times WHERE tg_id = 1').first<any>();
+    expect((await best()).time_ms).toBe(190_000);
+    await applyBestTime(env.DB, 1, 'normal', 205_000, a, 3000);
+    expect((await best()).time_ms).toBe(190_000);
+  });
+
   it('таблица по возрастанию времени, при равенстве раньше финишировавший выше', async () => {
     await finish(1, 200_000, 3000);
     await finish(2, 190_000, 4000);
