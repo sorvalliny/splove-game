@@ -1,3 +1,4 @@
+import { PER_WEEK } from './quests';
 import { mskDay, weekStart, isoWeekKey, WEEK_SEC, DAY_SEC } from './time';
 
 export interface Cohort { total: number; kept: number }
@@ -14,7 +15,6 @@ export interface Metrics {
 /** Метры, с которых засчитывается лагерь: первый на 400 м, четвёртый на 1900 м. */
 const CAMP1_M = 400;
 const CAMP4_M = 1900;
-const QUESTS_PER_WEEK = 3;
 
 const one = async <T>(db: D1Database, sql: string, ...args: unknown[]): Promise<T> =>
   (await db.prepare(sql).bind(...args).first<T>())!;
@@ -89,7 +89,7 @@ export async function collectMetrics(db: D1Database, now: number, chatSize: numb
     funnel,
     runsPerPlayerDay: ratio(perDay.runs, perDay.pd),
     rejectedShare: ratio(rej.rejected, rej.total),
-    quests: { active, done: pts.n, rate: ratio(pts.n, QUESTS_PER_WEEK * active), weekPoints: pts.p },
+    quests: { active, done: pts.n, rate: ratio(pts.n, PER_WEEK * active), weekPoints: pts.p },
   };
 }
 
@@ -107,7 +107,7 @@ export function formatMetrics(m: Metrics): string {
     `Удержание: D1 ${cohortPct(m.retention.d1)} · D7 ${cohortPct(m.retention.d7)} · D30 ${cohortPct(m.retention.d30)}`,
     `Воронка: открыли ${f.opened} → играли ${f.played} → 1-й лагерь ${f.camp1} → 4-й лагерь ${f.camp4} → финиш —`,
     `Заплывов на игрока в день: ${dec(m.runsPerPlayerDay)}`,
-    `Задания недели: выполнено ${pct(m.quests.rate)} (${m.quests.done}/${m.quests.active * QUESTS_PER_WEEK}) · баллов ${m.quests.weekPoints.toLocaleString('ru')}`,
+    `Задания недели: выполнено ${pct(m.quests.rate)} (${m.quests.done}/${m.quests.active * PER_WEEK}) · баллов ${m.quests.weekPoints.toLocaleString('ru')}`,
     `Отклонено заплывов за 7 дней: ${m.rejectedShare === null ? '—' : dec(m.rejectedShare * 100) + '%'}`,
   ].join('\n');
 }

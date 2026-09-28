@@ -6,6 +6,7 @@ import { registerChat, ensureChat, markGreeted, deactivateChat, migrateChat } fr
 import { joinByCode } from '../db/communities';
 import { upsertPlayer } from '../db/players';
 import { handleAdmin } from './admin';
+import { escHtml } from '../telegram/escape';
 import { RULES, groupGreeting, privateGreeting, joinedChat, JOIN_FAIL } from './texts';
 
 const LEVEL_NAMES: Record<Level, string> = {
@@ -36,7 +37,7 @@ async function boardText(env: Env): Promise<string> {
   for (const level of LEVELS) {
     const board = await getBoard(env.DB, level, 5);
     const rows = board.length
-      ? board.map((r, i) => `${MEDALS[i] ?? `${i + 1}.`} ${r.name} — ${r.bank.toLocaleString('ru')}`).join('\n')
+      ? board.map((r, i) => `${MEDALS[i] ?? `${i + 1}.`} ${escHtml(r.name)} — ${r.bank.toLocaleString('ru')}`).join('\n')
       : 'пока никто не плавал';
     parts.push(`<b>${LEVEL_NAMES[level]}</b>\n${rows}`);
   }
@@ -85,7 +86,8 @@ async function handleStartPrivate(
 }
 
 export async function handleWebhook(req: Request, env: Env): Promise<Response> {
-  if (req.headers.get('x-telegram-bot-api-secret-token') !== env.WEBHOOK_SECRET) {
+  // Пустой секрет не должен пускать пустой заголовок: иначе любой подделает from.id админа.
+  if (!env.WEBHOOK_SECRET || req.headers.get('x-telegram-bot-api-secret-token') !== env.WEBHOOK_SECRET) {
     return new Response('нет', { status: 401 });
   }
 

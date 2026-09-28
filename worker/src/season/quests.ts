@@ -16,7 +16,7 @@ export const POOL: Quest[] = [
   { id: 'days3',     title: 'Сыграть в 3 разных дня',  points: 200, goal: 3,    metric: 'days' },
 ];
 
-const PER_WEEK = 3;
+export const PER_WEEK = 3;
 
 /** Три подряд идущих задания набора по кругу; у всех игроков одни и те же. */
 export function questsForWeek(weekIdx: number): Quest[] {

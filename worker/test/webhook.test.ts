@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { activeChats } from '../src/db/chats';
+import { upsertPlayer } from '../src/db/players';
+import { insertRun, applyBest } from '../src/db/runs';
+import { handleWebhook } from '../src/routes/webhook';
 
 const sent: any[] = [];
 const captureFetch = () =>
@@ -116,5 +119,37 @@ describe('правила', () => {
   it('кнопка называется «Вёсла на воду»', async () => {
     await hook(update('/start'));
     expect(sent[0].body.reply_markup.inline_keyboard[0][0].text).toContain('Вёсла на воду');
+  });
+});
+
+describe('безопасность вебхука и HTML', () => {
+  // Имя задаёт игрок, а бот шлёт HTML: имя «<b» ломает разметку и молчит /top у всех.
+  it('/top экранирует имена игроков', async () => {
+    await env.DB.prepare('DELETE FROM bests').run();
+    await env.DB.prepare('DELETE FROM runs').run();
+    await env.DB.prepare('DELETE FROM memberships').run();
+    await env.DB.prepare('DELETE FROM players').run();
+    await upsertPlayer(env.DB, { id: 5, first_name: '<b' }, 1000);
+    const id = await insertRun(env.DB, {
+      tgId: 5, level: 'easy', bank: 700, onboard: 0, meters: 900, durationMs: 60_000,
+      oarsLost: 0, startedAt: 1_000_000, rejected: null,
+    }, 2000);
+    await applyBest(env.DB, 5, 'easy', 700, 900, id, 2000);
+
+    await hook(update('/top'));
+    const text: string = sent[0].body.text;
+    expect(text).toContain('&lt;b');
+    expect(text).not.toMatch(/<b(?!>|\/)/);
+  });
+
+  it('пустой секрет вебхука не открывает доступ по пустому заголовку', async () => {
+    const req = new Request('https://example.com/tg/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': '' },
+      body: JSON.stringify(update('/start', 956875, 'private')),
+    });
+    const res = await handleWebhook(req, { ...env, WEBHOOK_SECRET: '' } as any);
+    expect(res.status).toBe(401);
+    expect(sent.length).toBe(0);
   });
 });

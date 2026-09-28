@@ -86,6 +86,18 @@ describe('/ban и /unban', () => {
     expect(sent[0].text).toContain('Нет такого игрока');
   });
 
+  it('слишком длинное число не превращается в дробный id', async () => {
+    await hook(message('/ban 99999999999999999999'));
+    expect(sent[0].text).toContain('Нужен числовой id');
+  });
+
+  it('админа банить нельзя, даже самого себя', async () => {
+    await upsertPlayer(env.DB, { id: ADMIN, first_name: 'Виктор' }, 1000);
+    await hook(message(`/ban ${ADMIN}`));
+    expect(await banned(ADMIN)).toBe(0);
+    expect(sent[0].text).toContain('Админа банить нельзя');
+  });
+
   it('id вида «123abc» числом не считается', async () => {
     await hook(message('/ban 123abc'));
     expect(await banned(123)).toBe(0);

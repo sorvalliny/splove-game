@@ -96,8 +96,12 @@ async function openScreen() {
   document.getElementById('menu')?.classList.add('hide');
   el.classList.remove('hide');
   paintScreen();
-  await load();
-  paintScreen();
+  try {
+    await load();
+    paintScreen();
+  } catch {
+    /* остаёмся на прежних данных */
+  }
 }
 
 function paintScreen() {

@@ -324,8 +324,10 @@ const keyHold={};addEventListener('keyup',e=>{held.delete('k'+e.key)});
 addEventListener('keydown',e=>{const k=e.key;
   if(k==='ArrowLeft'||k==='a'||k==='ф'){if(!held.has('k'+k))steer(-1);held.set('k'+k,-1)}if(k==='ArrowRight'||k==='d'||k==='в'){if(!held.has('k'+k))steer(1);held.set('k'+k,1)}
   if(k==='ArrowUp'||k==='w'||k==='ц'){steer(-1);steer(1)}
-  if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();start()}
+  if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();if(!overlayOpen())start()}
   if(k==='m'||k==='ь')toggleSheet()});
+// Экраны «Сезон» и «Рейтинг» лежат поверх меню: Enter и Пробел под ними не должны запускать заплыв.
+const overlayOpen=()=>['seasonScreen','board'].some(id=>{const el=$(id);return el&&!el.classList.contains('hide')});
 function start(){audio();if(AC.state==='suspended')AC.resume();runSeed=(Math.random()*4294967296)>>>0;simT=0;simTick=0;acc=0;reset(runSeed);G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
 $('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
 // Проба воспроизводимости: прогоняет чистую симуляцию без ввода и возвращает

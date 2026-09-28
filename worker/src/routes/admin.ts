@@ -1,5 +1,6 @@
 import type { Env } from '../index';
 import { sendMessage } from '../telegram/api';
+import { escHtml as esc } from '../telegram/escape';
 import { collectMetrics, formatMetrics } from '../season/metrics';
 import { totalsBoard } from '../db/season';
 
@@ -9,9 +10,6 @@ interface AdminMessage {
 }
 
 const ADMIN_COMMANDS = new Set(['/metrics', '/season', '/ban', '/unban']);
-
-/** Бот шлёт HTML, а имена задают пользователи: без экранирования имя ломает разметку. */
-const esc = (t: string): string => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
 
 const adminIds = (env: Env): number[] =>
   (env.ADMIN_IDS ?? '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0);
@@ -33,6 +31,8 @@ async function setBanned(env: Env, chatId: number, arg: string | undefined, bann
   if (!arg || !/^\d+$/.test(arg)) return reply(env, chatId, `Нужен числовой id игрока: ${cmd} 123456`);
 
   const id = Number(arg);
+  if (!Number.isSafeInteger(id)) return reply(env, chatId, `Нужен числовой id игрока: ${cmd} 123456`);
+  if (banned && adminIds(env).includes(id)) return reply(env, chatId, 'Админа банить нельзя');
   const player = await env.DB.prepare('SELECT name FROM players WHERE tg_id = ?').bind(id).first<{ name: string }>();
   if (!player) return reply(env, chatId, `Нет такого игрока: ${id}`);
 
