@@ -224,6 +224,10 @@ const DIFF={
   hard:{name:'Шторм',gap:.9,ramp:4500,loss:.3,inv:1.1,grace:120,barge:500,hmel:1.1,oar:.15,speed:1.15,hit:1}};
 let LV='easy';const D=()=>DIFF[LV];globalThis.currentLevel=()=>LV;
 let hudCache={},G,state='menu',t=0,best=0,paused=false,runStartedAt=0,continuesLeft=0,runFinalized=false,runSeed=0;
+const FIRST_CAMP_M=400; // первый лагерь, метров от старта
+const CAMP_GAP_M=500;   // дальше лагерь каждые столько метров: раньше расстояние удваивалось
+const TOW_GRACE=3;      // секунд неуязвимости после катера
+const TOW_CLEAR_SCREENS=1.4; // на сколько экранов вперёд катер расчищает воду при отцепе
 const CONTINUES=2; // столько раз за заплыв можно вернуться в последний лагерь
 const CAMPS=['Ширяево','Жигули','Самарская Лука','Молодецкий курган','Царёв курган','Усинский залив','Хвалынь'];
 function reset(seed){
@@ -232,7 +236,7 @@ function reset(seed){
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
     objs:[],camps:[],fx:[],texts:[],npc:null,
-    nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+800*11*U,campGap:800*11*U,lastCamp:null};
+    nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+FIRST_CAMP_M*11*U,campGap:CAMP_GAP_M*11*U,lastCamp:null};
   lyric=[];hudCache={};
 }
 reset(1);
@@ -262,7 +266,7 @@ function spawn(){
   if(G.nGena<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+rnd()*7000)*U}
   if(G.nCapt<ahead){G.objs.push({type:'capt',s:G.nCapt,x:place(rnd()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+rnd()*10000)*U}
   if(G.nBoat<ahead){G.objs.push({type:'boat',s:G.nBoat,x:place(rnd()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(rnd()<.5?-1:1)*40*U});G.nBoat+=(8000+rnd()*6000)*U}
-  if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.campGap*=2;G.nCamp+=G.campGap}
+  if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.nCamp+=G.campGap}
 }
 const meters=()=>Math.round((G.k.s-G.k.s0)/M());
 
@@ -313,7 +317,7 @@ function gameOver(){
     cont.textContent='Вернуться в «'+G.lastCamp.name+'» ('+continuesLeft+')';
     $('rT').textContent='Очки, сданные в лагерь, сохранены.';
   }else if(continuesLeft>0){
-    $('rT').textContent='До лагеря не дошёл — возвращаться некуда. Первый лагерь на 800 метрах.';
+    $('rT').textContent='До лагеря не дошёл — возвращаться некуда. Первый лагерь на '+FIRST_CAMP_M+' метрах.';
   }else{
     $('rT').textContent='';
   }
@@ -381,7 +385,9 @@ function update(dt){
   if(G.tow>0){
     G.tow-=dt;k.ang=Math.sin(simT*7)*.24+Math.sin(simT*2.3)*.1;k.x=lerp(k.x,c+Math.sin(simT*.9)*w*.15,dt*1.5);k.s+=(cur+390*U)*dt;k.kvx=k.kvs=0;
     if(Math.random()<dt*18)splash(k.x+(Math.random()-.5)*20*U,k.s-40*U,2,60);
-    if(G.tow<=0){floatT('Катер отцепился',k.x,k.s+100*U);k.F=Math.max(k.F,160*U)}
+    if(G.tow<=0){floatT('Катер отцепился',k.x,k.s+100*U);k.F=Math.max(k.F,160*U);k.inv=Math.max(k.inv,TOW_GRACE);
+      // Катер вывозит вперёд на сотни метров: без расчистки его пассажир вылетает прямо на препятствия.
+      for(const o of G.objs)if(!o.pick&&o.type!=='lostoar'&&o.s<k.s+H*TOW_CLEAR_SCREENS){o.dead=1;puff(o.x,o.s)}}
   }else{
     const tF=oarCount()*(44+d*16)*U*D().speed*(G.capt>0?1.9:1);k.F+=(tF-k.F)*dt*1.4;
     if(G.hmel>0){k.av+=(n1(simT*1.4)-.5)*G.hmel*.09*dt*10*D().hmel;if(G.hmel>55&&Math.random()<dt*.5){sfx.hic();floatT('ик!',k.x+30*U,k.s+40*U)}}
