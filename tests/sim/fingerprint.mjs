@@ -28,8 +28,11 @@ export function stageZeroRun(t, seed, level = 'easy') {
   return { steps, stage: t.G.stage ?? 0, snapshot: snapshot(t) };
 }
 
+/** Каждый заплыв на чистой загрузке игры: часы симуляции сбрасывает только кнопка «На воду». */
 export function captureStage0() {
-  const { t } = loadGame();
   return STAGE0_SEEDS.flatMap((seed) =>
-    ['easy', 'normal', 'hard'].map((level) => ({ seed, level, ...stageZeroRun(t, seed, level) })));
+    ['easy', 'normal', 'hard'].map((level) => {
+      const { t } = loadGame();
+      return { seed, level, ...stageZeroRun(t, seed, level) };
+    }));
 }
