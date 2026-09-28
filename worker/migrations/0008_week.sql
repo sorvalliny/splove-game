@@ -13,3 +13,9 @@ CREATE TABLE IF NOT EXISTS boosters (
   used_at    INTEGER,
   UNIQUE (tg_id, earned_key)
 );
+
+-- Отметки об отправленных постах: итог недели уходит в чат один раз, даже если расписание сработало дважды.
+CREATE TABLE IF NOT EXISTS posts (
+  key TEXT PRIMARY KEY,
+  at  INTEGER NOT NULL
+);

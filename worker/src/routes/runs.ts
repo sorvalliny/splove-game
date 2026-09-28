@@ -4,6 +4,9 @@ import { authorize } from '../http/auth';
 import { checkRun, LEVELS, type Level, type Rejection } from '../game/plausible';
 import { sanitizeStats } from '../game/stats';
 import { awardQuests, type Quest } from '../season/quests';
+import { awardWeekPlay, type WeekPlay } from '../season/weekly';
+import { isoWeekKey } from '../season/time';
+import { weekBoard, myWeek } from '../db/week';
 import {
   insertRun, findRunByStart, overlapsPrevious, countRunsSince,
   applyBest, getBests, getBoard, getRank, type Best,
@@ -22,6 +25,8 @@ interface Body {
   oarsLost: number;
   startedAt: number;
   stats?: unknown;
+  mode?: unknown;
+  week?: unknown;
 }
 
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -54,6 +59,25 @@ async function outcome(
   };
 }
 
+/** Итог заплыва недели: место и таблица недели вместо таблицы сложности. */
+async function weekOutcome(
+  env: Env, tgId: number, weekKey: string, bank: number,
+  rejected: Rejection | null, isRecord: boolean, newQuests: Quest[], weekly: WeekPlay,
+) {
+  const mine = await myWeek(env.DB, tgId, weekKey);
+  const board = (await weekBoard(env.DB, weekKey, BOARD_SIZE)).map(({ name, bank: b }) => ({ name, bank: b }));
+  return {
+    rejected,
+    isRecord,
+    best: mine ? { bank: mine.bank, meters: null } : null,
+    delta: mine ? bank - mine.bank : null,
+    rank: mine?.rank ?? null,
+    board,
+    newQuests: newQuests.map(({ id, title, points }) => ({ id, title, points })),
+    weekly,
+  };
+}
+
 export async function handleRuns(req: Request, env: Env): Promise<Response> {
   const auth = await authorize(req, env);
   if (!auth.ok) return auth.res;
@@ -70,6 +94,12 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
   if (known) {
     // Первый запрос мог оборваться между записью заплыва и начислением: начисление идемпотентно.
     const owed = known.rejected === null ? await awardQuests(env.DB, tgId, nowSec) : [];
+    if (known.mode === 'week' && known.week) {
+      const weekly = known.rejected === null
+        ? await awardWeekPlay(env.DB, tgId, known.created_at, known.week)
+        : { points: 0, booster: null };
+      return ok(await weekOutcome(env, tgId, known.week, known.bank, known.rejected as Rejection | null, false, owed, weekly));
+    }
     return ok(await outcome(env, tgId, known.level, known.bank, known.rejected as Rejection | null, false, owed));
   }
 
@@ -79,17 +109,31 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
     rejected = 'daily_limit';
   }
 
+  // Заплыв недели засчитывается, только если клиент назвал ключ текущей недели.
+  const curWeek = isoWeekKey(nowSec);
+  const isWeek = body.mode === 'week' && body.week === curWeek;
+  const prevWeekBest = isWeek ? await myWeek(env.DB, tgId, curWeek) : null;
+
   const runId = await insertRun(env.DB, {
     tgId, level: body.level, bank: body.bank, onboard: body.onboard, meters: body.meters,
     durationMs: body.durationMs, oarsLost: body.oarsLost, startedAt: body.startedAt,
     rejected, stats: sanitizeStats(body.stats, body.meters),
+    mode: isWeek ? 'week' : 'free', week: isWeek ? curWeek : null,
   }, nowSec);
 
+  // Заплывы недели не попадают в таблицы сложностей: у них своя таблица.
   const isRecord = rejected
     ? false
-    : await applyBest(env.DB, tgId, body.level, body.bank, body.meters, runId, nowSec);
+    : isWeek
+      ? !prevWeekBest || body.bank > prevWeekBest.bank
+      : await applyBest(env.DB, tgId, body.level, body.bank, body.meters, runId, nowSec);
 
   const newQuests = rejected ? [] : await awardQuests(env.DB, tgId, nowSec);
+
+  if (isWeek) {
+    const weekly = rejected ? { points: 0, booster: null } : await awardWeekPlay(env.DB, tgId, nowSec, curWeek);
+    return ok(await weekOutcome(env, tgId, curWeek, body.bank, rejected as Rejection | null, isRecord, newQuests, weekly));
+  }
 
   return ok(await outcome(env, tgId, body.level, body.bank, rejected as Rejection | null, isRecord, newQuests));
 }

@@ -13,6 +13,8 @@ export interface RunRow {
   rejected: string | null;
   started_at: number;
   created_at: number;
+  mode: 'free' | 'week';
+  week: string | null;
 }
 
 export interface NewRun {

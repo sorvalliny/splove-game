@@ -4,6 +4,8 @@ import { handleRuns } from './routes/runs';
 import { handleProfile } from './routes/profile';
 import { handleBoard } from './routes/board';
 import { handleSeason } from './routes/season';
+import { handleWeek, handleBoosterUse } from './routes/week';
+import { closeWeek } from './season/weekly';
 import { handleWebhook } from './routes/webhook';
 
 export interface Env {
@@ -17,6 +19,7 @@ export interface Env {
   INVITE_CODE: string;
   ADMIN_IDS: string;
   CHAT_SIZE: string;
+  WEEKLY_POST?: string;
 }
 
 type Handler = (req: Request, env: Env) => Promise<Response>;
@@ -27,9 +30,16 @@ const ROUTES: Record<string, Handler> = {
   '/api/profile': handleProfile,
   '/api/board': handleBoard,
   '/api/season': handleSeason,
+  '/api/week': handleWeek,
+  '/api/booster/use': handleBoosterUse,
 };
 
 export default {
+  /** Ночь на понедельник: бонусы мест за закончившуюся неделю и, если разрешено, итог в чат. */
+  async scheduled(_event: unknown, env: Env): Promise<void> {
+    await closeWeek(env, Math.floor(Date.now() / 1000));
+  },
+
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const cors = (res: Response) => withCors(res, env.ALLOWED_ORIGIN);
