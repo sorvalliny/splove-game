@@ -234,7 +234,8 @@ const sfx={
   horn(){if(!AC)return;osc(now(),196,1.1,.16,'sawtooth');osc(now(),247,1.1,.1,'sawtooth')},
   motor(){if(!AC)return;const o=osc(now(),55,10,.12,'sawtooth',1,sfxBus,.3)},
   shout(){if(!AC)return;const t=now();[0,.2,.45].forEach((d,i)=>{const o=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();o.type='sawtooth';o.frequency.setValueAtTime(220+i*20,t+d);o.frequency.linearRampToValueAtTime(i===2?330:200,t+d+(i===2?.9:.18));f.type='bandpass';f.frequency.value=900;f.Q.value=3;g.gain.setValueAtTime(0,t+d);g.gain.linearRampToValueAtTime(.18,t+d+.02);g.gain.exponentialRampToValueAtTime(.001,t+d+(i===2?1:.2));o.connect(f).connect(g).connect(sfxBus);o.start(t+d);o.stop(t+d+1.1)})},
-  hic(){if(AC){osc(now(),500,.12,.1,'sine',2)}}
+  hic(){if(AC){osc(now(),500,.12,.1,'sine',2)}},
+  gust(){if(!AC)return;nz(now(),1.4,'bandpass',500,900,.12,2)}
 };
 // instruments
 const I={
@@ -297,6 +298,16 @@ const STAGE={
   netFrom:3,       // сеть рыбаков: перегон 4
   jetFrom:4,       // гидроцикл: перегон 5
   borschFrom:1, banyaFrom:1, sanchezFrom:2};
+// Погода «Шторма»: лимит времени, боковой ветер порывами и дождь. Только на сложности «Шторм».
+const STORM={limitSec:330,gustGap:[10,18],gustLen:[3,5],force:40,warnSec:1.5,rainGrip:.85,maxGusts:40};
+/** Порывы считаются от зерна заплыва, а не от Math.random(): симуляцию можно повторить. */
+function makeGusts(seed){const g=[];let t0=0;
+  for(let i=0;i<STORM.maxGusts;i++){
+    const gap=STORM.gustGap[0]+hash(seed*.00137+i*17.13)*(STORM.gustGap[1]-STORM.gustGap[0]);
+    const len=STORM.gustLen[0]+hash(seed*.00291+i*9.71+3)*(STORM.gustLen[1]-STORM.gustLen[0]);
+    const dir=hash(seed*.00053+i*5.37+7)<.5?-1:1;
+    const start=t0+gap;g.push({start,len,dir});t0=start+len}
+  return g}
 // Дистанция финиша по сложностям, метры; такая же таблица FINISH_M на сервере.
 const FINISH_M={easy:3000,normal:4000,hard:5000};
 const CONTINUES=2; // столько раз за заплыв можно вернуться в последний лагерь
@@ -306,7 +317,7 @@ function reset(seed){
   const s0=rnd()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
-    stage:0,keep:[],finishAt:s0+FINISH_M[LV]*11*U,finished:false,nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
+    storm:LV==='hard'?{gusts:makeGusts(seed),warned:-1}:null,stage:0,keep:[],finishAt:s0+FINISH_M[LV]*11*U,finished:false,nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
     st:{gena:0,bottles:0,camps:0,sanchez:0},stSnap:{gena:0,bottles:0,sanchez:0}, // для заданий сезона; gena выше — таймер, а не счётчик
     objs:[],camps:[],fx:[],texts:[],npc:null,
     nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+FIRST_CAMP_M*11*U,campGap:CAMP_GAP_M*11*U,lastCamp:null};
@@ -416,6 +427,29 @@ function toggleSheet(){const o=$('sheet').classList.toggle('open');paused=o&&sta
 function markTrack(){[...$('sheet').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.t===MUS.track));$('trk').textContent=G.gena>0?'Гена на гитаре':TR[MUS.track].name}
 $('spk').onclick=toggleSheet;
 $('sheet').querySelectorAll('button').forEach(b=>b.onclick=()=>{MUS.track=b.dataset.t;markTrack();setTimeout(toggleSheet,180)});
+/** Сила ветра сейчас: колокол внутри порыва, сильнее с каждой ступенью. Вне «Шторма» ноль. */
+function windNow(){
+  const st=G.storm;if(!st)return 0;
+  for(const g of st.gusts){
+    if(g.start>simT)break;
+    if(simT<g.start+g.len)return g.dir*STORM.force*U*(1+.08*Math.min(G.stage,STAGE.cap))*Math.sin(Math.PI*(simT-g.start)/g.len)}
+  return 0}
+/** Предупреждение за 1,5 секунды до порыва и лимит времени «Шторма». */
+function stormTick(){
+  const st=G.storm;if(!st||state!=='play')return;
+  const next=st.gusts[st.warned+1];
+  if(next&&simT>=next.start-STORM.warnSec){st.warned++;floatT('Порыв '+(next.dir<0?'слева':'справа'),G.k.x,G.k.s+110*U,'#9fd0ff');sfx.gust()}
+  if(!G.finished&&simT>=STORM.limitSec)timeUp()}
+/** Время «Шторма» вышло: заплыв заканчивается без финиша, очки на воде сдаются, в «Время» он не попадает. */
+function timeUp(){
+  G.bank+=Math.round(G.onb);G.onb=0;
+  const m=meters();state='over';
+  $('overTitle').textContent='Время вышло';
+  $('rB').textContent=G.bank;$('rL').textContent=0;$('rM').textContent=m;
+  $('rT').textContent='Лимит «Шторма» 5:30. Очки сохранены.';
+  $('cont').style.display='none';
+  $('over').classList.remove('hide');
+  finishRun(m)}
 /** Время «м:сс,д»; такая же функция formatTime лежит в js/season-format.js для остальных экранов. */
 const fmtTime=ms=>{if(!(ms>0))return'0:00,0';const d=Math.floor(ms/100);return Math.floor(d/600)+':'+String(Math.floor(d%600/10)).padStart(2,'0')+','+d%10};
 /** Линия финиша пересечена: очки на воде сдаются в лагерь автоматически, время — время симуляции без пауз. */
@@ -524,9 +558,9 @@ function update(dt){
   }else{
     const tF=oarCount()*(44+d*16)*U*D().speed*(G.capt>0?1.9:1);k.F+=(tF-k.F)*dt*1.4;
     if(G.hmel>0){k.av+=(n1(simT*1.4)-.5)*G.hmel*.09*dt*10*D().hmel;if(G.hmel>55&&Math.random()<dt*.5){sfx.hic();floatT('ик!',k.x+30*U,k.s+40*U)}}
-    let hold=0;for(const v of held.values())hold+=v;k.av+=clamp(hold,-1,1)*4.2*dt;k.av*=Math.exp(-3.2*dt);k.ang+=k.av*dt;k.ang+=-k.ang*.75*dt;k.ang=clamp(k.ang,-1.15,1.15);
+    let hold=0;for(const v of held.values())hold+=v;k.av+=clamp(hold,-1,1)*4.2*dt*(G.storm?STORM.rainGrip:1);k.av*=Math.exp(-3.2*dt);k.ang+=k.av*dt;k.ang+=-k.ang*.75*dt;k.ang=clamp(k.ang,-1.15,1.15);
     k.kvx*=Math.exp(-3*dt);k.kvs*=Math.exp(-3*dt);
-    k.x+=(cvx+Math.sin(k.ang)*k.F+k.kvx)*dt;k.s+=(cur+Math.cos(k.ang)*k.F+k.kvs)*dt;
+    k.x+=(cvx+Math.sin(k.ang)*k.F+k.kvx+windNow())*dt;k.s+=(cur+Math.cos(k.ang)*k.F+k.kvs)*dt;
     const lim=w/2-18*U;if(Math.abs(k.x-c)>lim){const sd=Math.sign(k.x-c);k.x=c+sd*lim;k.av-=sd*1.2;k.kvx=-sd*60*U}
   }
   k.inv=Math.max(0,k.inv-dt);k.ph+=dt*(3+k.F/(40*U));
@@ -550,6 +584,7 @@ function update(dt){
   for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.boostX2=0;G.keep=G.keep.filter(x=>x.s>cp.s);G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   if(state==='play'&&!G.finished&&k.s>=G.finishAt)finishLine();
+  stormTick();
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
   // раньше два независимых расписания расходились и он кричал посреди пустой реки.
@@ -704,6 +739,14 @@ function drawKayak(){
     if(b>.6){ctx.fillStyle='rgba(255,226,122,.9)';ctx.font=`${14*U}px sans-serif`;ctx.fillText('♪',16*U+Math.random()*6*U,py-12*U)}}
   ctx.restore();
 }
+/** Дождь «Шторма»: серая дымка и косые капли, наклон по ветру. Косметика, на симуляцию не влияет. */
+function drawRain(){
+  ctx.fillStyle='rgba(28,48,58,.22)';ctx.fillRect(0,0,W,H);
+  const lean=clamp(windNow()/(STORM.force*U),-1,1)*14*U+4*U;
+  ctx.strokeStyle='rgba(220,235,240,.35)';ctx.lineWidth=1.2*U;ctx.beginPath();
+  const n=RM?40:110;
+  for(let i=0;i<n;i++){const ph=(t*1.6+hash(i*3.1))%1,x=hash(i*7.7)*W+ph*lean,y=ph*H*1.05-8*U;ctx.moveTo(x,y);ctx.lineTo(x+lean*.5,y+16*U)}
+  ctx.stroke()}
 function draw(rdt){
   const k=G.k;ctx.save();
   if(G.shake>0&&!RM){ctx.translate((Math.random()-.5)*G.shake,(Math.random()-.5)*G.shake);G.shake*=.86}
@@ -725,6 +768,7 @@ function draw(rdt){
   lyric=lyric.filter(l=>!AC||AC.currentTime-l.t<3);
   for(const x of G.texts){const a=Math.min(1,x.life*2),yy=sy(x.ws)-(1.3-x.life)*30*U;ctx.font=`700 ${15*U+4}px Onest,sans-serif`;ctx.textAlign='center';ctx.fillStyle=`rgba(22,38,42,${a*.5})`;ctx.fillText(x.s,x.x+1.5,yy+1.5);ctx.globalAlpha=a;ctx.fillStyle=x.col||'#f5f1e6';ctx.fillText(x.s,x.x,yy);ctx.globalAlpha=1}
   ctx.restore();
+  if(G.storm)drawRain();
   // golden evening light
   const lg=ctx.createLinearGradient(W,0,0,H);lg.addColorStop(0,'rgba(255,200,120,.2)');lg.addColorStop(.6,'rgba(255,200,120,0)');lg.addColorStop(1,'rgba(30,40,70,.15)');ctx.fillStyle=lg;ctx.fillRect(0,0,W,H);
   if(G.hmel>30){const vg=ctx.createRadialGradient(W/2,H/2,H*.2,W/2,H/2,H*.8);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(120,40,60,${(G.hmel-30)/70*.35})`);ctx.fillStyle=vg;ctx.fillRect(0,0,W,H)}
@@ -737,7 +781,7 @@ function hud(){
   set('oars',G.k.oars.join(''),()=>[...$('oars').children].forEach((e,i)=>e.classList.toggle('lost',!G.k.oars[i])));
   set('hm',Math.round(G.hmel),v=>$('hmel').style.width=v+'%');
   const b=[];if(G.gena>0)b.push('Гена поёт: очки ×2, ещё '+Math.ceil(G.gena)+' с');if(G.capt>0)b.push('Капитан Виктор: путь чист, ещё '+Math.ceil(G.capt)+' с');
-  if(state==='play'&&!G.finished)b.push('До финиша: '+Math.max(0,Math.round((G.finishAt-G.k.s)/M())).toLocaleString('ru')+' м');if(G.boostX2)b.push('Бустер: очки ×2 до лагеря');if(G.k.shield>0)b.push('Бустер: щит');if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
+  if(G.storm&&state==='play'){const left=Math.max(0,Math.ceil(STORM.limitSec-simT));b.push('Время: '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0'))}if(state==='play'&&!G.finished)b.push('До финиша: '+Math.max(0,Math.round((G.finishAt-G.k.s)/M())).toLocaleString('ru')+' м');if(G.boostX2)b.push('Бустер: очки ×2 до лагеря');if(G.k.shield>0)b.push('Бустер: щит');if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
   set('buff',b.join('|'),()=>$('buff').innerHTML=b.map(s=>'<div>'+s+'</div>').join(''));
 }
 
