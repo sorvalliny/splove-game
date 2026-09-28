@@ -163,7 +163,7 @@ describe('сезонные баллы за заплыв', () => {
   const savedStats = () =>
     env.DB.prepare('SELECT gena, bottles, camps FROM runs').first<Record<string, number>>();
   const pointsCount = async () =>
-    (await env.DB.prepare('SELECT COUNT(*) AS n FROM points').first<{ n: number }>())!.n;
+    (await env.DB.prepare("SELECT COUNT(*) AS n FROM points WHERE key LIKE 'q:%'").first<{ n: number }>())!.n;
 
   it('заплыв, выполняющий задание недели, сообщает о нём и начисляет баллы', async () => {
     inSeason();

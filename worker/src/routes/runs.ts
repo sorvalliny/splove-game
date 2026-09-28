@@ -4,6 +4,7 @@ import { authorize } from '../http/auth';
 import { checkRun, LEVELS, type Level, type Rejection } from '../game/plausible';
 import { sanitizeStats } from '../game/stats';
 import { acceptFinish } from '../game/finish';
+import { awardSkill, type SkillAward } from '../season/skill';
 import { awardQuests, type Quest } from '../season/quests';
 import { awardWeekPlay, type WeekPlay } from '../season/weekly';
 import { isoWeekKey } from '../season/time';
@@ -48,6 +49,7 @@ async function outcome(
   env: Env, tgId: number, level: Level, bank: number,
   rejected: Rejection | null, isRecord: boolean, newQuests: Quest[] = [],
   finish: { timeMs: number; isRecord: boolean } | null = null,
+  skill: SkillAward[] = [],
 ) {
   const bests = await getBests(env.DB, tgId);
   const best: Best | null = bests[level] ?? null;
@@ -61,6 +63,7 @@ async function outcome(
     board: await getBoard(env.DB, level, BOARD_SIZE),
     newQuests: newQuests.map(({ id, title, points }) => ({ id, title, points })),
     ...(finish ? { finish: { ...finish, rank: await finishRank(env, tgId, level) } } : {}),
+    skill,
   };
 }
 
@@ -120,7 +123,10 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
             : false,
         }
       : null;
-    return ok(await outcome(env, tgId, known.level, known.bank, known.rejected as Rejection | null, false, owed, knownFinish));
+    const knownSkill = known.rejected === null && known.mode === 'free'
+      ? await awardSkill(env.DB, tgId, known.created_at, known.level, { finished: knownFinish !== null, record: knownFinish?.isRecord ?? false })
+      : [];
+    return ok(await outcome(env, tgId, known.level, known.bank, known.rejected as Rejection | null, false, owed, knownFinish, knownSkill));
   }
 
   let rejected: Rejection | 'too_often' | 'daily_limit' | null = checkRun({ ...body }, nowMs);
@@ -176,5 +182,9 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
     ? { timeMs: body.timeMs as number, isRecord: await applyBestTime(env.DB, tgId, body.level, body.timeMs as number, runId, nowSec) }
     : null;
 
-  return ok(await outcome(env, tgId, body.level, body.bank, rejected as Rejection | null, isRecord, newQuests, finish));
+  const skill = rejected || stale
+    ? []
+    : await awardSkill(env.DB, tgId, nowSec, body.level, { finished: finish !== null, record: isRecord || (finish?.isRecord ?? false) });
+
+  return ok(await outcome(env, tgId, body.level, body.bank, rejected as Rejection | null, isRecord, newQuests, finish, skill));
 }
