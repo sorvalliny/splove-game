@@ -23,10 +23,12 @@ const call = (init?: string) =>
   });
 
 beforeEach(async () => {
+  await env.DB.prepare('DELETE FROM points').run();
+  await env.DB.prepare('DELETE FROM visits').run();
   await env.DB.prepare('DELETE FROM players').run();
   await env.DB.prepare('DELETE FROM chats').run();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('POST /api/session', () => {
   it('участник чата получает профиль', async () => {
@@ -87,5 +89,27 @@ describe('POST /api/session', () => {
   it('health отвечает без авторизации', async () => {
     const res = await SELF.fetch('https://example.com/api/health');
     expect((await res.json<any>()).data.up).toBe(true);
+  });
+});
+
+describe('визиты', () => {
+  const visits = async () =>
+    (await env.DB.prepare('SELECT day FROM visits ORDER BY day').all<{ day: string }>()).results.map((r) => r.day);
+  const at = (iso: string) => vi.setSystemTime(new Date(`${iso}+03:00`));
+
+  it('два захода за день — одна строка', async () => {
+    at('2026-10-05T10:00:00');
+    await call(initData());
+    at('2026-10-05T22:00:00');
+    await call(initData());
+    expect(await visits()).toEqual(['2026-10-05']);
+  });
+
+  it('день считается по Москве: 23:59 и 00:01 — разные дни', async () => {
+    at('2026-10-05T23:59:30');
+    await call(initData());
+    at('2026-10-06T00:00:30');
+    await call(initData());
+    expect(await visits()).toEqual(['2026-10-05', '2026-10-06']);
   });
 });

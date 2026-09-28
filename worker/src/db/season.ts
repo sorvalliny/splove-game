@@ -1,5 +1,6 @@
 import type { Season } from '../season/state';
 import type { WeekProgress } from '../season/quests';
+import { mskDay } from '../season/time';
 
 export async function getSeasons(db: D1Database): Promise<Season[]> {
   const { results } = await db.prepare('SELECT id, title, starts_at, ends_at FROM seasons ORDER BY starts_at').all<Season>();
@@ -34,4 +35,9 @@ export async function addPoints(
     .bind(tgId, seasonId, key, points, now)
     .run();
   return res.meta.changes === 1;
+}
+
+/** Один визит в день на игрока (день по Москве): из этого считаются DAU, MAU и удержание. */
+export async function recordVisit(db: D1Database, tgId: number, now: number): Promise<void> {
+  await db.prepare('INSERT OR IGNORE INTO visits (tg_id, day) VALUES (?1, ?2)').bind(tgId, mskDay(now)).run();
 }
