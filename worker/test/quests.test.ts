@@ -13,7 +13,7 @@ let startedAt = 1_000_000;
 const play = (created: number, over: Record<string, unknown> = {}) => insertRun(env.DB, {
   tgId: 1, level: 'normal', bank: 100, onboard: 0, meters: 300, durationMs: 60_000, oarsLost: 0,
   startedAt: (startedAt += 100_000), rejected: null,
-  stats: { gena: 0, bottles: 0, camps: 0 }, ...over,
+  stats: { gena: 0, bottles: 0, camps: 0, sanchez: 0 }, ...over,
 } as Parameters<typeof insertRun>[1], created);
 
 const points = () => env.DB.prepare('SELECT key, points FROM points ORDER BY id').all<{ key: string; points: number }>()
@@ -31,7 +31,8 @@ beforeEach(async () => {
 describe('набор заданий недели', () => {
   it('по индексу недели берутся три подряд идущих по кругу', () => {
     expect(questsForWeek(0).map((q) => q.id)).toEqual(['gena', 'camp3', 'bottles10']);
-    expect(questsForWeek(3).map((q) => q.id)).toEqual(['km2', 'days3', 'gena']);
+    expect(questsForWeek(3).map((q) => q.id)).toEqual(['km2', 'days3', 'sanchez']);
+    expect(questsForWeek(5).map((q) => q.id)).toEqual(['sanchez', 'gena', 'camp3']);
   });
 
   it('отрицательный индекс даёт три разных задания', () => {
@@ -40,7 +41,7 @@ describe('набор заданий недели', () => {
   });
 
   it('цель достигается ровно на границе', () => {
-    const zero: WeekProgress = { gena: 0, camps: 0, bottles: 0, meters: 0, days: 0 };
+    const zero: WeekProgress = { gena: 0, camps: 0, bottles: 0, meters: 0, days: 0, sanchez: 0 };
     const byId = Object.fromEntries(POOL.map((q) => [q.id, q]));
     expect(isDone(byId.gena, { ...zero, gena: 1 })).toBe(true);
     expect(isDone(byId.camp3, { ...zero, camps: 2 })).toBe(false);
@@ -48,6 +49,8 @@ describe('набор заданий недели', () => {
     expect(isDone(byId.bottles10, { ...zero, bottles: 9 })).toBe(false);
     expect(isDone(byId.km2, { ...zero, meters: 2000 })).toBe(true);
     expect(isDone(byId.days3, { ...zero, days: 3 })).toBe(true);
+    expect(isDone(byId.sanchez, { ...zero, sanchez: 0 })).toBe(false);
+    expect(isDone(byId.sanchez, { ...zero, sanchez: 1 })).toBe(true);
   });
 });
 
@@ -99,5 +102,13 @@ describe('начисление баллов за задания', () => {
     expect(await awardQuests(env.DB, 1, now)).toEqual([]);
     await play(msk('2026-10-20T10:00:00'), { meters: 900 });
     expect((await awardQuests(env.DB, 1, now)).map((q) => q.id)).toEqual(['km2']);
+  });
+
+  it('«выпить ухи с Санчезом» засчитывается, когда Санчез в наборе недели', async () => {
+    const now = msk('2026-10-21T12:00:00');       // неделя 3: km2, days3, sanchez
+    await play(msk('2026-10-20T10:00:00'), { stats: { gena: 0, bottles: 0, camps: 0, sanchez: 1 } });
+    const fresh = await awardQuests(env.DB, 1, now);
+    expect(fresh.map((q) => q.id)).toEqual(['sanchez']);
+    expect(await points()).toEqual([{ key: 'q:autumn-2026:2026-W43:sanchez', points: 250 }]);
   });
 });

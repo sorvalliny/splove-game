@@ -3,7 +3,7 @@ import { sanitizeStats, ZERO_STATS } from '../src/game/stats';
 
 describe('sanitizeStats', () => {
   it('честные данные проходят как есть', () => {
-    expect(sanitizeStats({ gena: 1, bottles: 12, camps: 2 }, 1500)).toEqual({ gena: 1, bottles: 12, camps: 2 });
+    expect(sanitizeStats({ gena: 1, bottles: 12, camps: 2 }, 1500)).toEqual({ gena: 1, bottles: 12, camps: 2, sanchez: 0 });
   });
 
   it('слишком много бутылок на дистанции обнуляет всё', () => {
@@ -39,5 +39,18 @@ describe('sanitizeStats', () => {
 
   it.each([[null], [undefined], ['x'], [42], [[]]])('не объект (%j) даёт нули', (raw) => {
     expect(sanitizeStats(raw, 5000)).toEqual(ZERO_STATS);
+  });
+
+  it('Санчез: поле необязательно, первый не раньше 1800 м, дальше не чаще раза в 2 км', () => {
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0 }, 500).sanchez).toBe(0);
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0, sanchez: 1 }, 1799)).toEqual(ZERO_STATS);
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0, sanchez: 1 }, 1800).sanchez).toBe(1);
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0, sanchez: 2 }, 3799)).toEqual(ZERO_STATS);
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0, sanchez: 2 }, 3800).sanchez).toBe(2);
+  });
+
+  it('Санчез дробный или строкой обнуляет всё', () => {
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0, sanchez: 0.5 }, 9000)).toEqual(ZERO_STATS);
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0, sanchez: '1' }, 9000)).toEqual(ZERO_STATS);
   });
 });

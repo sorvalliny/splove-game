@@ -17,13 +17,14 @@ export async function weekProgress(
               COALESCE(MAX(camps), 0)   AS camps,
               COALESCE(SUM(bottles), 0) AS bottles,
               COALESCE(SUM(meters), 0)  AS meters,
+              COALESCE(SUM(sanchez), 0) AS sanchez,
               COUNT(DISTINCT date(created_at, 'unixepoch', '+3 hours')) AS days
        FROM runs
        WHERE tg_id = ?1 AND rejected IS NULL AND created_at >= ?2 AND created_at < ?3`,
     )
     .bind(tgId, fromSec, toSec)
     .first<WeekProgress>();
-  return row ?? { gena: 0, camps: 0, bottles: 0, meters: 0, days: 0 };
+  return row ?? { gena: 0, camps: 0, bottles: 0, meters: 0, days: 0, sanchez: 0 };
 }
 
 /** Начисление идемпотентно: ключ уникален для игрока. Возвращает true, только если строка вставлена. */

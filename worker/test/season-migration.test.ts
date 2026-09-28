@@ -16,7 +16,7 @@ describe('миграция 0006', () => {
   });
 
   it('у заплыва есть колонки статистики, у игрока banned', async () => {
-    expect(await columns('runs')).toEqual(expect.arrayContaining(['gena', 'bottles', 'camps']));
+    expect(await columns('runs')).toEqual(expect.arrayContaining(['gena', 'bottles', 'camps', 'sanchez']));
     expect(await columns('players')).toContain('banned');
   });
 

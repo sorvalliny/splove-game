@@ -2,11 +2,11 @@ import { getSeasons, weekProgress, addPoints } from '../db/season';
 import { activeSeason } from './state';
 import { isoWeekKey, weekIndex, weekStart, WEEK_SEC } from './time';
 
-export type Metric = 'gena' | 'camps' | 'bottles' | 'meters' | 'days';
+export type Metric = 'gena' | 'camps' | 'bottles' | 'meters' | 'days' | 'sanchez';
 
 export interface Quest { id: string; title: string; points: number; goal: number; metric: Metric }
 
-export interface WeekProgress { gena: number; camps: number; bottles: number; meters: number; days: number }
+export interface WeekProgress { gena: number; camps: number; bottles: number; meters: number; days: number; sanchez: number }
 
 export const POOL: Quest[] = [
   { id: 'gena',      title: 'Подобрать Гену',          points: 150, goal: 1,    metric: 'gena' },
@@ -14,6 +14,7 @@ export const POOL: Quest[] = [
   { id: 'bottles10', title: 'Собрать 10 бутылок',      points: 100, goal: 10,   metric: 'bottles' },
   { id: 'km2',       title: 'Проплыть 2 км за неделю', points: 150, goal: 2000, metric: 'meters' },
   { id: 'days3',     title: 'Сыграть в 3 разных дня',  points: 200, goal: 3,    metric: 'days' },
+  { id: 'sanchez',   title: 'Выпить ухи с Дядей Санчезом', points: 250, goal: 1, metric: 'sanchez' },
 ];
 
 export const PER_WEEK = 3;
