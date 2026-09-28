@@ -19,8 +19,18 @@ let cameFrom = 'menu';
 
 const say = (text) => { document.getElementById('rT').textContent = text; };
 
-function resultText(d, run) {
+const BOOSTER_NAMES = { shield: 'Щит', x2: 'Удвоение', life: 'Запасное возвращение' };
+
+function weekText(d, run) {
+  const parts = [d.isRecord ? `Рекорд недели ${run.bank}` : `Твой лучший за неделю ${d.best?.bank ?? 0}`, `${d.rank}-е место`];
+  if (d.weekly?.points) parts.push(`+${d.weekly.points} баллов`);
+  if (d.weekly?.booster) parts.push(`получен бустер: ${BOOSTER_NAMES[d.weekly.booster]}`);
+  return parts.join('. ');
+}
+
+export function resultText(d, run) {
   if (d.rejected) return REJECT_TEXT[d.rejected] ?? 'Результат не засчитан';
+  if (run.mode === 'week') return weekText(d, run);
   if (d.isRecord) return `Личный рекорд. ${d.rank}-е место на «${run.levelName}»`;
   const miss = d.delta === null ? null : -d.delta;
   const tail = miss && miss > 0 ? `, не хватило ${miss}` : '';
@@ -59,8 +69,9 @@ export function wireRuns(profile) {
 
     const done = (r.data.newQuests ?? []).map((q) => `${q.title} +${q.points}`);
     say(done.length ? `${resultText(r.data, run)}. Задание выполнено: ${done.join(', ')}` : resultText(r.data, run));
-    if (r.data.best) globalThis.updateBest?.(run.level, r.data.best);
+    if (r.data.best && run.mode !== 'week') globalThis.updateBest?.(run.level, r.data.best);
     globalThis.refreshSeason?.();
+    globalThis.refreshWeek?.();
   };
 
   document.getElementById('toBoard')?.addEventListener('click', () => show(lastLevel, 'over'));

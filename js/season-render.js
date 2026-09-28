@@ -26,6 +26,16 @@ export function boardHtml(board) {
     </li>`).join('');
 }
 
+export function weekBoardHtml(board) {
+  if (!board?.length) return '<li class="empty">На этой неделе ещё никто не плавал</li>';
+  return board.map((r, i) => `
+    <li${r.isMe ? ' class="me"' : ''}>
+      <b>${i + 1}</b>
+      <span class="nm">${esc(r.name)}</span>
+      <span class="pt">${ru(r.bank)}</span>
+    </li>`).join('');
+}
+
 export function champsHtml(champions) {
   if (!champions?.length) return '';
   return champions.map((c) => `🏆 ${esc(c.title)}: ${esc(c.name)}`).join('<br>');

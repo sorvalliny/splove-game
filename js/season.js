@@ -1,7 +1,8 @@
 import { inTelegram } from './auth.js';
 import { season as fetchSeason } from './api.js';
 import { formatCountdown } from './season-format.js';
-import { questsHtml, boardHtml, champsHtml } from './season-render.js';
+import { questsHtml, boardHtml, champsHtml, weekBoardHtml } from './season-render.js';
+import { weekData } from './week.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -109,6 +110,8 @@ function paintScreen() {
   document.getElementById('seasonQuests').innerHTML = questsHtml(data.quests);
   document.getElementById('seasonBoard').innerHTML = boardHtml(data.board);
   document.getElementById('seasonChamps').innerHTML = champsHtml(data.champions);
+  const w = document.getElementById('seasonWeek');
+  if (w) w.innerHTML = weekBoardHtml(weekData()?.board);
 }
 
 function closeScreen() {

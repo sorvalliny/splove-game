@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { questsHtml, boardHtml, champsHtml } from '../../js/season-render.js';
+import { questsHtml, boardHtml, champsHtml, weekBoardHtml } from '../../js/season-render.js';
 
 const quest = (over = {}) => ({ id: 'gena', title: 'Подобрать Гену', goal: 1, progress: 0, done: false, points: 150, ...over });
 
@@ -57,4 +57,15 @@ test('титулы чемпионов: сезон и имя; без чемпио
   assert.match(html, /Осень/);
   assert.match(html, /Гена/);
   assert.equal(champsHtml([]), '');
+});
+
+test('таблица недели: места, имена, банк, своя строка подсвечена', () => {
+  const html = weekBoardHtml([{ name: 'Аня', bank: 900, isMe: false }, { name: 'Виктор', bank: 700, isMe: true }]);
+  assert.match(html, /<b>1<\/b>[\s\S]*Аня[\s\S]*900/);
+  assert.match(html, /<li class="me">[\s\S]*<b>2<\/b>[\s\S]*Виктор/);
+});
+
+test('пустая таблица недели и экранирование имён', () => {
+  assert.match(weekBoardHtml([]), /На этой неделе ещё никто не плавал/);
+  assert.doesNotMatch(weekBoardHtml([{ name: '<img>', bank: 1, isMe: false }]), /<img>/);
 });

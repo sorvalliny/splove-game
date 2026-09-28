@@ -1,0 +1,33 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+globalThis.Telegram = { WebApp: { initData: 'x', ready() {}, expand() {} } };
+globalThis.document = { getElementById: () => null, querySelectorAll: () => [] };
+const { resultText } = await import('../../js/runs.js');
+
+const base = { rejected: null, isRecord: false, best: { bank: 500, meters: 900 }, delta: -100, rank: 3, weekly: undefined };
+
+test('обычный заплыв: рекорд и место', () => {
+  assert.match(resultText({ ...base, isRecord: true }, { levelName: 'Сплав', mode: 'free', bank: 600 }), /Личный рекорд. 3-е место на «Сплав»/);
+});
+
+test('заплыв недели: рекорд недели, место, баллы и бустер', () => {
+  const text = resultText(
+    { ...base, isRecord: true, best: { bank: 600, meters: null }, weekly: { points: 50, booster: 'shield' } },
+    { mode: 'week', bank: 600 },
+  );
+  assert.match(text, /Рекорд недели 600/);
+  assert.match(text, /3-е место/);
+  assert.match(text, /\+50 баллов/);
+  assert.match(text, /бустер: Щит/i);
+});
+
+test('заплыв недели без рекорда: показывает лучший результат недели', () => {
+  const text = resultText({ ...base, weekly: { points: 0, booster: null } }, { mode: 'week', bank: 100 });
+  assert.match(text, /лучший за неделю 500/i);
+  assert.doesNotMatch(text, /баллов|бустер/);
+});
+
+test('отклонённый заплыв недели объясняет причину', () => {
+  assert.match(resultText({ ...base, rejected: 'too_fast' }, { mode: 'week', bank: 1 }), /слишком быстро/);
+});

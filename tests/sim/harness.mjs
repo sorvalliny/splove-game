@@ -14,7 +14,7 @@ export const INDEX_HTML = path.join(HERE, '..', '..', 'index.html');
  * Внутренности игры выставляются через `__t`, который добавляет этот харнесс,
  * в самой игре никаких тестовых люков нет (кроме исторического __simProbe).
  */
-export function loadGame(file = INDEX_HTML) {
+export function loadGame(file = INDEX_HTML, { weekInfo = null } = {}) {
   const html = fs.readFileSync(file, 'utf8');
   const m = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].find((x) => x[1].includes('__simProbe'));
   if (!m) throw new Error('скрипт игры не найден');
@@ -23,6 +23,9 @@ export function loadGame(file = INDEX_HTML) {
   const end = code.lastIndexOf('})();');
   const expose = `globalThis.__t={
     reset, spawn, update, collect, hit, continueRun, finishRun, drawObj, circlesFor,
+    beginRun: typeof beginRun === 'undefined' ? null : beginRun,
+    get continuesLeft(){ return continuesLeft },
+    get level(){ return LV },
     setState(v){ state = v },
     setLevel(v){ LV = v },
     setCont(v){ continuesLeft = v; runFinalized = false },
@@ -52,6 +55,7 @@ export function loadGame(file = INDEX_HTML) {
   ctx.globalThis = ctx;
   ctx.window = ctx;
   ctx.onRunEnd = (run) => sent.push(run);
+  if (weekInfo) ctx.weekInfo = weekInfo;
   vm.createContext(ctx);
   vm.runInContext(code, ctx, { filename: file });
   return { t: ctx.__t, probe: ctx.__simProbe, sent };

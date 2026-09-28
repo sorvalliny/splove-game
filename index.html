@@ -44,6 +44,11 @@
   .seasonCard .sBar i{display:block;height:100%;background:var(--kayak);border-radius:3px}
   .seasonCard small{opacity:.8;font-size:13px}
   .seasonCard{cursor:pointer}
+  .weekLine{font-size:13px;opacity:.8;margin:0 0 8px}
+  .weekLine[hidden],.boosterRow[hidden]{display:none}
+  .boosterRow{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+  .screen .boosterRow button{font:600 13px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:7px 12px;border-radius:18px;box-shadow:none}
+  .screen .boosterRow button.on{background:var(--kayak);color:var(--ink)}
   #seasonScreen{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
   #seasonScreen h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
   #seasonScreen h3{font-size:13px;opacity:.7;margin:18px 0 8px;font-weight:600}
@@ -55,14 +60,20 @@
   #seasonScreen .sBar i{display:block;height:100%;background:var(--kayak);border-radius:3px}
   #seasonScreen small{opacity:.8;font-size:13px}
   #seasonScreen .sNote{font-size:14px;opacity:.75;margin:0}
-  #seasonBoard{list-style:none;margin:0;padding:0;max-width:460px}
+  #seasonBoard,#seasonWeek{list-style:none;margin:0;padding:0;max-width:460px}
+  #seasonWeek li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
+  #seasonWeek li:nth-child(odd){background:rgba(245,241,230,.05)}
+  #seasonWeek li.me{background:rgba(244,180,26,.18);box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
+  #seasonWeek li b{min-width:28px;opacity:.75;color:var(--foam)}
+  #seasonWeek li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #seasonWeek li .pt{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
   #seasonBoard li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
   #seasonBoard li:nth-child(odd){background:rgba(245,241,230,.05)}
   #seasonBoard li.me{background:rgba(244,180,26,.18);box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
   #seasonBoard li b{min-width:28px;opacity:.75;color:var(--foam)}
   #seasonBoard li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #seasonBoard li .pt{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
-  #seasonBoard li.empty{opacity:.55;justify-content:center;background:none}
+  #seasonBoard li.empty,#seasonWeek li.empty{opacity:.55;justify-content:center;background:none}
   #seasonChamps{font-size:14px;line-height:1.6;margin-top:14px;max-width:460px}
   .lvl{display:flex;gap:6px;margin:0 0 18px;max-width:420px}
   .lvl button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:10px 10px;border-radius:24px;box-shadow:none;text-align:left;line-height:1.2}
@@ -127,8 +138,11 @@
     <button data-l="hard">Шторм<span>для опытных</span></button>
   </div>
   <div class="seasonCard" id="seasonCard" hidden></div>
+  <div class="weekLine" id="weekLine" hidden></div>
+  <div class="boosterRow" id="boosterRow" hidden></div>
   <div class="overBtns">
     <button id="start">На воду</button>
+    <button id="startWeek" class="ghost" hidden>Заплыв недели</button>
     <button id="menuBoard" class="ghost">Рейтинг</button>
   </div>
 </div>
@@ -148,6 +162,8 @@
   <div id="seasonQuests"></div>
   <h3>Таблица по баллам</h3>
   <ol id="seasonBoard"></ol>
+  <h3>Заплыв недели</h3>
+  <ol id="seasonWeek"></ol>
   <div id="seasonChamps"></div>
   <div class="overBtns" style="margin-top:18px"><button id="seasonBack">Назад</button></div>
 </div>
@@ -353,11 +369,25 @@ const keyHold={};addEventListener('keyup',e=>{held.delete('k'+e.key)});
 addEventListener('keydown',e=>{const k=e.key;
   if(k==='ArrowLeft'||k==='a'||k==='ф'){if(!held.has('k'+k))steer(-1);held.set('k'+k,-1)}if(k==='ArrowRight'||k==='d'||k==='в'){if(!held.has('k'+k))steer(1);held.set('k'+k,1)}
   if(k==='ArrowUp'||k==='w'||k==='ц'){steer(-1);steer(1)}
-  if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();if(!overlayOpen())start()}
+  if((k==='Enter'||k===' ')&&state!=='play'){e.preventDefault();if(!overlayOpen())begin('free')}
   if(k==='m'||k==='ь')toggleSheet()});
 // Экраны «Сезон» и «Рейтинг» лежат поверх меню: Enter и Пробел под ними не должны запускать заплыв.
 const overlayOpen=()=>['seasonScreen','board'].some(id=>{const el=$(id);return el&&!el.classList.contains('hide')});
-function start(){audio();if(AC.state==='suspended')AC.resume();runSeed=(Math.random()*4294967296)>>>0;simT=0;simTick=0;acc=0;reset(runSeed);G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
+let runMode='free',runWeek=null,starting=false;
+/** Начало заплыва без звука: режим «неделя» берёт зерно и сложность из недели, бустер применяется к этому заплыву. */
+function beginRun(mode,boost){
+  const week=mode==='week'?globalThis.weekInfo?.():null;
+  if(week){LV='normal';runSeed=week.seed;runWeek=week.key;runMode='week'}
+  else{runSeed=(Math.random()*4294967296)>>>0;runWeek=null;runMode='free'}
+  simT=0;simTick=0;acc=0;reset(runSeed);G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;
+  if(boost==='shield')G.k.shield=1;else if(boost==='x2')G.boostX2=1;else if(boost==='life')continuesLeft++;
+  G.boost=boost||null;
+  state='play';held.clear();$('menu').classList.add('hide');$('over').classList.add('hide')}
+function startRun(mode,boost){audio();if(AC.state==='suspended')AC.resume();beginRun(mode,boost)}
+/** Старт: сначала списываем заряженный бустер на сервере (нет связи или отказ означает игру без него). */
+async function begin(mode){
+  if(starting||state==='play')return;starting=true;
+  try{const boost=(await globalThis.consumeBooster?.())??null;startRun(mode,boost)}finally{starting=false}}
 $('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
 // Проба воспроизводимости: прогоняет чистую симуляцию без ввода и возвращает
 // отпечаток состояния. Два вызова с одним seed обязаны совпасть до числа.
@@ -372,7 +402,7 @@ globalThis.__simProbe=(seed,steps)=>{
   state=keep.state;G=keep.G;simT=keep.simT;simTick=keep.simTick;
   return fp;
 };
-$('start').onclick=start;$('cont').onclick=continueRun;$('again').onclick=()=>{finishRun();$('over').classList.add('hide');$('menu').classList.remove('hide');state='menu'};
+$('start').onclick=()=>begin('free');$('startWeek').onclick=()=>begin('week');$('cont').onclick=continueRun;$('again').onclick=()=>{finishRun();$('over').classList.add('hide');$('menu').classList.remove('hide');state='menu'};
 function toggleSheet(){const o=$('sheet').classList.toggle('open');paused=o&&state==='play';audio();if(AC.state==='suspended')AC.resume();markTrack()}
 function markTrack(){[...$('sheet').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.t===MUS.track));$('trk').textContent=G.gena>0?'Гена на гитаре':TR[MUS.track].name}
 $('spk').onclick=toggleSheet;
@@ -402,7 +432,7 @@ function finishRun(m){
   globalThis.onRunEnd?.({
     level:LV, bank:Math.round(G.bank), onboard:Math.round(G.onb), meters:m??meters(),
     durationMs:Date.now()-runStartedAt, oarsLost:G.oarsLost, startedAt:runStartedAt,
-    levelName:D().name, stats:{...G.st},
+    levelName:D().name, stats:{...G.st}, mode:runMode, week:runWeek,
   });
 }
 
@@ -428,7 +458,9 @@ function floatT(s,x,ws,col){G.texts.push({s,x,ws,life:1.3,col})}
 function splash(x,s,n,sp=90){for(let i=0;i<n;i++){const a=Math.random()*6.28,v=(20+Math.random()*sp)*U;G.fx.push({x,s,vx:Math.cos(a)*v,vs:Math.sin(a)*v,z:0,vz:(50+Math.random()*90)*U,life:.8})}}
 function puff(x,s){for(let i=0;i<14;i++){const a=Math.random()*6.28,v=(30+Math.random()*80)*U;G.fx.push({x,s,vx:Math.cos(a)*v,vs:Math.sin(a)*v,z:0,vz:0,life:1,puff:1})}}
 function hit(o){
-  const k=G.k;if(k.inv>0)return;k.inv=D().inv;sfx.hit();G.shake=12;G.flash=.35;
+  const k=G.k;if(k.inv>0)return;
+  if(k.shield>0){k.shield=0;k.inv=D().inv;G.flash=.2;sfx.hit();floatT('Щит спас!',k.x,k.s+70*U,'#9fe0c8');return}
+  k.inv=D().inv;sfx.hit();G.shake=12;G.flash=.35;
   const have=k.oars.map((v,i)=>v?i:-1).filter(i=>i>=0);
   if(have.length){const i=have[Math.floor(rnd()*have.length)];k.oars[i]=0;G.oarsLost++;G.objs.push({type:'lostoar',x:k.x+(i-1)*14*U,s:k.s,seed:rnd()*9,vx:(rnd()-.5)*60*U,life:3})}
   if(G.instr>0)floatT('инструктор прикрыл',k.x,k.s+70*U,'#9fe0c8');
@@ -437,7 +469,7 @@ function hit(o){
 }
 function collect(o){
   const k=G.k;o.dead=1;
-  const mult=G.gena>0?2:1;
+  const mult=(G.gena>0?2:1)*(G.boostX2?2:1);
   if(o.type==='beer'){G.st.bottles++;G.onb+=40*mult;G.hmel=Math.min(100,G.hmel+12);sfx.bottle();floatT('пиво +'+40*mult,o.x,o.s)}
   if(o.type==='wine'){G.st.bottles++;G.onb+=100*mult;G.hmel=Math.min(100,G.hmel+26);sfx.bottle();floatT('вино +'+100*mult,o.x,o.s)}
   if(o.type==='teq'){G.st.bottles++;G.onb+=180*mult;G.hmel=Math.min(100,G.hmel+42);k.F+=70*U;sfx.bottle();floatT('текила +'+180*mult,o.x,o.s)}
@@ -475,7 +507,7 @@ function update(dt){
   k.inv=Math.max(0,k.inv-dt);k.ph+=dt*(3+k.F/(40*U));
   if(Math.random()<dt*4)G.fx.push({x:k.x,s:k.s-50*U,ring:1,r:6*U,life:1});
   // score
-  const dm=(k.s-k.prevS)/M();k.prevS=k.s;if(G.tow<=0)G.onb+=Math.max(0,dm)*(G.gena>0?2:1)*(G.capt>0?1.5:1);
+  const dm=(k.s-k.prevS)/M();k.prevS=k.s;if(G.tow<=0)G.onb+=Math.max(0,dm)*(G.gena>0?2:1)*(G.capt>0?1.5:1)*(G.boostX2?2:1);
   G.onb=Math.round(G.onb*10)/10;
   // objects
   const bow=[k.x+Math.sin(k.ang)*38*U,k.s+Math.cos(k.ang)*38*U],str=[k.x-Math.sin(k.ang)*38*U,k.s-Math.cos(k.ang)*38*U];
@@ -490,7 +522,7 @@ function update(dt){
   }
   G.objs=G.objs.filter(o=>!o.dead&&o.s>k.s-H*.7);
   // camps
-  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.keep=G.keep.filter(x=>x.s>cp.s);G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
+  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.boostX2=0;G.keep=G.keep.filter(x=>x.s>cp.s);G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
@@ -670,7 +702,7 @@ function hud(){
   set('oars',G.k.oars.join(''),()=>[...$('oars').children].forEach((e,i)=>e.classList.toggle('lost',!G.k.oars[i])));
   set('hm',Math.round(G.hmel),v=>$('hmel').style.width=v+'%');
   const b=[];if(G.gena>0)b.push('Гена поёт: очки ×2, ещё '+Math.ceil(G.gena)+' с');if(G.capt>0)b.push('Капитан Виктор: путь чист, ещё '+Math.ceil(G.capt)+' с');
-  if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
+  if(G.boostX2)b.push('Бустер: очки ×2 до лагеря');if(G.k.shield>0)b.push('Бустер: щит');if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
   set('buff',b.join('|'),()=>$('buff').innerHTML=b.map(s=>'<div>'+s+'</div>').join(''));
 }
 
@@ -703,6 +735,7 @@ import { ready, inTelegram } from './js/auth.js';
 import { session } from './js/api.js';
 import { wireRuns } from './js/runs.js';
 import { initSeason } from './js/season.js';
+import { initWeek } from './js/week.js';
 
 ready();
 
@@ -747,6 +780,7 @@ if (inTelegram()) {
   wireRuns(null);
 }
 
+initWeek();
 initSeason();
 </script>
 </body>

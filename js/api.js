@@ -27,3 +27,5 @@ export const sendRun = (run) => call('/api/runs', run);
 export const setTrack = (track) => call('/api/profile', { track });
 export const board = (level) => call('/api/board', { level });
 export const season = () => call('/api/season');
+export const week = () => call('/api/week');
+export const useBooster = (kind) => call('/api/booster/use', { kind });
