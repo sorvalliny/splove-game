@@ -5,6 +5,7 @@ import { LEVELS, type Level } from '../game/plausible';
 import { registerChat, ensureChat, markGreeted, deactivateChat, migrateChat } from '../db/chats';
 import { joinByCode } from '../db/communities';
 import { upsertPlayer } from '../db/players';
+import { handleAdmin } from './admin';
 import { RULES, groupGreeting, privateGreeting, joinedChat, JOIN_FAIL } from './texts';
 
 const LEVEL_NAMES: Record<Level, string> = {
@@ -124,6 +125,9 @@ export async function handleWebhook(req: Request, env: Env): Promise<Response> {
   const [cmdRaw, ...rest] = raw.split(/\s+/);
   const cmd = cmdRaw.toLowerCase().split('@')[0];
   const payload = rest.join(' ');
+
+  const admin = await handleAdmin(cmd, rest, msg!, env, now);
+  if (admin) return admin;
 
   if (cmd === '/start') {
     if (!isPrivate) {

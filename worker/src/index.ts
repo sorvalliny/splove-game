@@ -15,6 +15,8 @@ export interface Env {
   GAME_URL: string;
   BOT_NAME: string;
   INVITE_CODE: string;
+  ADMIN_IDS: string;
+  CHAT_SIZE: string;
 }
 
 type Handler = (req: Request, env: Env) => Promise<Response>;
