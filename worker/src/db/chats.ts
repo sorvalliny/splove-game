@@ -32,6 +32,17 @@ export async function registerChat(
   return !prev || prev.active === 0 || prev.greeted_at === null;
 }
 
+/** Запоминает чат, из которого пришло сообщение, если бот про него ещё не знает. Не здоровается. */
+export async function ensureChat(
+  db: D1Database, chatId: number, title: string | null, kind: string, now: number,
+): Promise<void> {
+  const known = await db
+    .prepare('SELECT 1 FROM chats WHERE chat_id = ? AND active = 1')
+    .bind(chatId)
+    .first();
+  if (!known) await registerChat(db, chatId, title, kind, now);
+}
+
 export async function markGreeted(db: D1Database, chatId: number, now: number): Promise<void> {
   await db.prepare('UPDATE chats SET greeted_at = ? WHERE chat_id = ?').bind(now, chatId).run();
 }

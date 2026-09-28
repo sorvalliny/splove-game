@@ -15,7 +15,7 @@ export async function isChatMember(botToken: string, chatId: string, tgId: numbe
     const url =
       `https://api.telegram.org/bot${botToken}/getChatMember` +
       `?chat_id=${encodeURIComponent(chatId)}&user_id=${tgId}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
     const body = (await res.json()) as ChatMemberResponse;
     return body.ok === true && MEMBER_STATUSES.has(body.result?.status ?? '');
   } catch {

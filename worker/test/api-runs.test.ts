@@ -112,11 +112,11 @@ describe('POST /api/runs', () => {
     expect(res.status).toBe(400);
   });
 
-  it('не участник чата заплыв не отправит', async () => {
+  it('игрок вне чата заплыв отправить может: игра открыта для всех', async () => {
     vi.stubGlobal('fetch', vi.fn(async () =>
       new Response(JSON.stringify({ ok: true, result: { status: 'left' } }))));
     const res = await sendRun();
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it('в ответе приходит таблица уровня', async () => {

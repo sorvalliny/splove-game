@@ -48,6 +48,11 @@ describe('игроки', () => {
     expect(needsMemberCheck(1000, 1000 + 86401)).toBe(true);
   });
 
+  it('тем, кто не участник, проверка повторяется быстро', () => {
+    expect(needsMemberCheck(1000, 1000 + 30, false)).toBe(false);
+    expect(needsMemberCheck(1000, 1000 + 61, false)).toBe(true);
+  });
+
   it('снятие членства сохраняется', async () => {
     await upsertPlayer(env.DB, user, 1000);
     await setMembership(env.DB, user.id, true, 1000);

@@ -2,7 +2,7 @@ import type { Env } from '../index';
 import { sendMessage } from '../telegram/api';
 import { getBoard } from '../db/runs';
 import { LEVELS, type Level } from '../game/plausible';
-import { registerChat, markGreeted, deactivateChat, migrateChat } from '../db/chats';
+import { registerChat, ensureChat, markGreeted, deactivateChat, migrateChat } from '../db/chats';
 import { joinByCode } from '../db/communities';
 import { upsertPlayer } from '../db/players';
 import { RULES, groupGreeting, privateGreeting, joinedChat, JOIN_FAIL } from './texts';
@@ -19,7 +19,7 @@ const PRESENT = new Set(['member', 'administrator', 'creator']);
 
 interface Update {
   message?: {
-    chat?: { id?: number; type?: string };
+    chat?: { id?: number; type?: string; title?: string };
     from?: { id?: number; first_name?: string; last_name?: string; username?: string };
     text?: string;
     migrate_to_chat_id?: number;
@@ -106,6 +106,17 @@ export async function handleWebhook(req: Request, env: Env): Promise<Response> {
 
   const msg = update?.message;
   const chatId = msg?.chat?.id;
+
+  // Событие «бота добавили» может не дойти. Сообщение из группы доказывает, что бот там есть.
+  if (chatId && GROUPS.has(msg?.chat?.type ?? '')) {
+    try {
+      await ensureChat(env.DB, chatId, msg?.chat?.title ?? null, msg!.chat!.type!, now);
+    } catch (e) {
+      // Запоминание чата — побочное дело: команды бота из-за него не должны замолкать.
+      console.error('ensureChat упал:', (e as Error).message);
+    }
+  }
+
   const raw = msg?.text?.trim();
   if (!chatId || !raw) return new Response('ok');
 

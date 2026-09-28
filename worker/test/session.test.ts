@@ -24,6 +24,7 @@ const call = (init?: string) =>
 
 beforeEach(async () => {
   await env.DB.prepare('DELETE FROM players').run();
+  await env.DB.prepare('DELETE FROM chats').run();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -38,19 +39,19 @@ describe('POST /api/session', () => {
     expect(body.data.player.isMember).toBe(true);
   });
 
-  it('членство спрашивается у Telegram один раз, потом берётся из базы', async () => {
-    const spy = memberReply('member');
+  // Игра открыта для всех: рейтинг не привязан к чату, достаточно подписи Telegram.
+  it('любой игрок с верной подписью проходит, Telegram о чатах не спрашивается', async () => {
+    const spy = memberReply('left');
     vi.stubGlobal('fetch', spy);
-    await call(initData());
-    await call(initData());
-    expect(spy).toHaveBeenCalledTimes(1);
+    const res = await call(initData());
+    expect(res.status).toBe(200);
+    expect(spy).not.toHaveBeenCalled();
   });
 
-  it('не участник получает отказ с понятным кодом', async () => {
+  it('новый игрок сразу считается участником рейтинга', async () => {
     vi.stubGlobal('fetch', memberReply('left'));
-    const res = await call(initData());
-    expect(res.status).toBe(403);
-    expect((await res.json<any>()).error.code).toBe('not_a_member');
+    const body = await (await call(initData())).json<any>();
+    expect(body.data.player.isMember).toBe(true);
   });
 
   it('битая подпись получает 401', async () => {

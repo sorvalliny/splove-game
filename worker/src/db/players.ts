@@ -13,6 +13,8 @@ export interface Player {
 }
 
 const MEMBER_TTL_SEC = 60 * 60 * 24;
+/** Не участника спрашиваем часто: он мог только что вступить или бота только что добавили в чат. */
+const STRANGER_TTL_SEC = 60;
 
 const fullName = (u: TgUser): string => [u.first_name, u.last_name].filter(Boolean).join(' ');
 
@@ -40,8 +42,9 @@ export async function upsertPlayer(db: D1Database, u: TgUser, now: number): Prom
   return row;
 }
 
-export const needsMemberCheck = (checkedAt: number | null, now: number): boolean =>
-  checkedAt === null || now - checkedAt > MEMBER_TTL_SEC;
+export const needsMemberCheck = (
+  checkedAt: number | null, now: number, isMember = true,
+): boolean => checkedAt === null || now - checkedAt > (isMember ? MEMBER_TTL_SEC : STRANGER_TTL_SEC);
 
 export async function setMembership(
   db: D1Database,

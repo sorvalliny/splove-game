@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
+import { activeChats } from '../src/db/chats';
 
 const sent: any[] = [];
 const captureFetch = () =>
@@ -74,6 +75,20 @@ describe('вебхук бота', () => {
     const res = await hook(update('топ'));
     expect(res.status).toBe(200);
     expect(sent[0].body.text).toContain('Прогулка');
+  });
+
+  // Событие «бота добавили» до бота не дошло: вебхук был подписан только на сообщения.
+  it('любое сообщение из группы запоминает чат, не здороваясь', async () => {
+    await env.DB.prepare('DELETE FROM chats').run();
+    await hook(update('всем привет', -1001, 'supergroup'));
+    expect((await activeChats(env.DB)).map((c) => c.chat_id)).toEqual([-1001]);
+    expect(sent.length).toBe(0);
+  });
+
+  it('сообщение из лички чат не создаёт', async () => {
+    await env.DB.prepare('DELETE FROM chats').run();
+    await hook(update('привет', 956875, 'private'));
+    expect(await activeChats(env.DB)).toEqual([]);
   });
 
   it('обычное сообщение бот игнорирует', async () => {
