@@ -9,3 +9,12 @@ export function formatCountdown(ms) {
   const ss = String(rest % 60).padStart(2, '0');
   return `${days > 0 ? `${days}д ` : ''}${hh}:${mm}:${ss}`;
 }
+
+/** Время финиша: «3:12,4» — минуты, секунды и десятые (вниз). Мусор и отрицательное дают «0:00,0». */
+export function formatTime(ms) {
+  if (!(ms > 0)) return '0:00,0';
+  const tenths = Math.floor(ms / 100);
+  const min = Math.floor(tenths / 600);
+  const sec = Math.floor((tenths % 600) / 10);
+  return `${min}:${String(sec).padStart(2, '0')},${tenths % 10}`;
+}

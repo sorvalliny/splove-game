@@ -1,6 +1,7 @@
 import { inTelegram } from './auth.js';
 import { sendRun } from './api.js';
 import { enqueue, dropFromQueue, queued, cacheBoard } from './store.js';
+import { formatTime } from './season-format.js';
 import { openBoard, hideBoard, setMe, currentLevel } from './board.js';
 
 const REJECT_TEXT = {
@@ -30,9 +31,21 @@ function weekText(d, run) {
   return parts.join('. ');
 }
 
+function finishText(d) {
+  const f = d.finish;
+  const record = f.isRecord ? ', личный рекорд времени' : '';
+  const place = f.rank ? `, ${f.rank}-е место по времени` : '';
+  return `Финиш! ${formatTime(f.timeMs)}${record}${place}`;
+}
+
 export function resultText(d, run) {
   if (d.rejected) return REJECT_TEXT[d.rejected] ?? 'Результат не засчитан';
   if (run.mode === 'week' && d.weekly) return weekText(d, run);
+  if (run.finished && d.finish) return `${finishText(d)}. ${pointsText(d, run)}`;
+  return pointsText(d, run);
+}
+
+function pointsText(d, run) {
   if (d.isRecord) return `Личный рекорд. ${d.rank}-е место на «${run.levelName}»`;
   const miss = d.delta === null ? null : -d.delta;
   const tail = miss && miss > 0 ? `, не хватило ${miss}` : '';
@@ -89,6 +102,8 @@ export function wireRuns(profile) {
 
   document.querySelectorAll('#brdTabs button').forEach((b) =>
     b.addEventListener('click', () => openBoard(b.dataset.l)));
+  document.querySelectorAll('#brdKind button').forEach((b) =>
+    b.addEventListener('click', () => openBoard(currentLevel(), b.dataset.k)));
 
   if (inTelegram()) flushQueue();
 }

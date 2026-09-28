@@ -42,3 +42,28 @@ test('заплыв прошлой недели: объясняет, что в т
 test('отклонённый заплыв недели объясняет причину', () => {
   assert.match(resultText({ ...base, rejected: 'too_fast' }, { mode: 'week', bank: 1 }), /слишком быстро/);
 });
+
+test('финиш: время, рекорд, место по времени и очки', () => {
+  const text = resultText(
+    { ...base, isRecord: true, finish: { timeMs: 192_400, isRecord: true, rank: 2 } },
+    { levelName: 'Сплав', mode: 'free', bank: 600, finished: true },
+  );
+  assert.match(text, /Финиш! 3:12,4/);
+  assert.match(text, /личный рекорд времени/i);
+  assert.match(text, /2-е место по времени/);
+  assert.match(text, /3-е место на «Сплав»/);
+});
+
+test('финиш без рекорда времени не хвастается рекордом', () => {
+  const text = resultText(
+    { ...base, finish: { timeMs: 200_000, isRecord: false, rank: 5 } },
+    { levelName: 'Сплав', mode: 'free', bank: 600, finished: true },
+  );
+  assert.match(text, /Финиш! 3:20,0/);
+  assert.doesNotMatch(text, /рекорд времени/i);
+});
+
+test('финиш, снятый сервером (нет finish), пишет обычный итог', () => {
+  const text = resultText(base, { levelName: 'Сплав', mode: 'free', bank: 600, finished: true });
+  assert.doesNotMatch(text, /Финиш!/);
+});

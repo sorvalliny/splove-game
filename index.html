@@ -90,6 +90,9 @@
   .sheet button:focus-visible{outline:2px solid var(--kayak)}
   #board{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
   #board h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
+  #brdKind{display:flex;gap:6px;margin-bottom:8px;max-width:460px}
+  #brdKind button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:9px 8px;border:0;border-radius:22px;cursor:pointer}
+  #brdKind button.on{background:var(--kayak);color:var(--ink)}
   #brdTabs{display:flex;gap:6px;margin-bottom:14px;max-width:460px}
   #brdTabs button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:9px 8px;border:0;border-radius:22px;cursor:pointer}
   #brdTabs button.on{background:var(--foam);color:var(--ink)}
@@ -133,9 +136,9 @@
   <p>Держите палец слева или справа, чтобы рулить, двумя пальцами — рывок. Удар стоит весла, лагерь сохраняет очки. Пиво, вино и текила дают очки и хмель.</p>
   <div class="lvlTitle">Сложность</div>
   <div class="lvl" id="lvl">
-    <button data-l="easy" class="on">Прогулка<span>первый раз</span></button>
-    <button data-l="normal">Сплав<span>как задумано</span></button>
-    <button data-l="hard">Шторм<span>для опытных</span></button>
+    <button data-l="easy" class="on">Прогулка<span>3 км · первый раз</span></button>
+    <button data-l="normal">Сплав<span>4 км · как задумано</span></button>
+    <button data-l="hard">Шторм<span>5 км · для опытных</span></button>
   </div>
   <div class="seasonCard" id="seasonCard" hidden></div>
   <div class="weekLine" id="weekLine" hidden></div>
@@ -147,7 +150,7 @@
   </div>
 </div>
 <div class="screen hide" id="over">
-  <h1 style="font-size:clamp(40px,11vw,90px)">Без вёсел</h1>
+  <h1 id="overTitle" style="font-size:clamp(40px,11vw,90px)">Без вёсел</h1>
   <div class="res"><div><b id="rB">0</b>несгораемая сумма</div><div><b id="rL">0</b>сгорело на воде</div><div><b id="rM">0</b>метров Волги</div></div>
   <p id="rT"></p>
   <div class="overBtns">
@@ -169,6 +172,10 @@
 </div>
 <div class="screen hide" id="board">
   <h2>Лучшие заплывы</h2>
+  <div id="brdKind">
+    <button data-k="points" class="on">Очки</button>
+    <button data-k="time">Время</button>
+  </div>
   <div id="brdTabs">
     <button data-l="easy">Прогулка</button>
     <button data-l="normal">Сплав</button>
@@ -290,6 +297,8 @@ const STAGE={
   netFrom:3,       // сеть рыбаков: перегон 4
   jetFrom:4,       // гидроцикл: перегон 5
   borschFrom:1, banyaFrom:1, sanchezFrom:2};
+// Дистанция финиша по сложностям, метры; такая же таблица FINISH_M на сервере.
+const FINISH_M={easy:3000,normal:4000,hard:5000};
 const CONTINUES=2; // столько раз за заплыв можно вернуться в последний лагерь
 const CAMPS=['Ширяево','Жигули','Самарская Лука','Молодецкий курган','Царёв курган','Усинский залив','Хвалынь'];
 function reset(seed){
@@ -297,7 +306,7 @@ function reset(seed){
   const s0=rnd()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
-    stage:0,keep:[],nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
+    stage:0,keep:[],finishAt:s0+FINISH_M[LV]*11*U,finished:false,nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
     st:{gena:0,bottles:0,camps:0,sanchez:0},stSnap:{gena:0,bottles:0,sanchez:0}, // для заданий сезона; gena выше — таймер, а не счётчик
     objs:[],camps:[],fx:[],texts:[],npc:null,
     nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+FIRST_CAMP_M*11*U,campGap:CAMP_GAP_M*11*U,lastCamp:null};
@@ -407,8 +416,22 @@ function toggleSheet(){const o=$('sheet').classList.toggle('open');paused=o&&sta
 function markTrack(){[...$('sheet').querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.t===MUS.track));$('trk').textContent=G.gena>0?'Гена на гитаре':TR[MUS.track].name}
 $('spk').onclick=toggleSheet;
 $('sheet').querySelectorAll('button').forEach(b=>b.onclick=()=>{MUS.track=b.dataset.t;markTrack();setTimeout(toggleSheet,180)});
+/** Время «м:сс,д»; такая же функция formatTime лежит в js/season-format.js для остальных экранов. */
+const fmtTime=ms=>{if(!(ms>0))return'0:00,0';const d=Math.floor(ms/100);return Math.floor(d/600)+':'+String(Math.floor(d%600/10)).padStart(2,'0')+','+d%10};
+/** Линия финиша пересечена: очки на воде сдаются в лагерь автоматически, время — время симуляции без пауз. */
+function finishLine(){
+  G.finished=true;G.bank+=Math.round(G.onb);G.onb=0;sfx.camp();
+  const timeMs=Math.round(simT*1000),m=meters();
+  state='finish';
+  $('overTitle').textContent='Финиш!';
+  $('rB').textContent=G.bank;$('rL').textContent=0;$('rM').textContent=m;
+  $('rT').textContent='Время '+fmtTime(timeMs);
+  $('cont').style.display='none';
+  $('over').classList.remove('hide');
+  finishRun(m,{finished:true,timeMs});
+}
 function gameOver(){
-  state='over';const m=meters();
+  state='over';const m=meters();$('overTitle').textContent='Без вёсел';
   $('rB').textContent=G.bank;$('rL').textContent=G.onb;$('rM').textContent=m;
   const canCont=continuesLeft>0&&G.lastCamp;
   const cont=$('cont');
@@ -426,13 +449,14 @@ function gameOver(){
 }
 
 /** Заплыв уходит в рейтинг один раз, сколько бы возвращений в лагерь внутри него ни было. */
-function finishRun(m){
+function finishRun(m,opts={}){
   if(runFinalized)return;
   runFinalized=true;
   globalThis.onRunEnd?.({
     level:LV, bank:Math.round(G.bank), onboard:Math.round(G.onb), meters:m??meters(),
     durationMs:Date.now()-runStartedAt, oarsLost:G.oarsLost, startedAt:runStartedAt,
     levelName:D().name, stats:{...G.st}, mode:runMode, week:runWeek,
+    finished:opts.finished===true, timeMs:opts.timeMs??null,
   });
   if(pickedLV!==null){LV=pickedLV;pickedLV=null} // заплыв недели шёл на «Сплаве»: возвращаем выбор игрока
 }
@@ -525,6 +549,7 @@ function update(dt){
   // camps
   for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.boostX2=0;G.keep=G.keep.filter(x=>x.s>cp.s);G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
+  if(state==='play'&&!G.finished&&k.s>=G.finishAt)finishLine();
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
   // раньше два независимых расписания расходились и он кричал посреди пустой реки.
@@ -566,6 +591,14 @@ function drawWorld(){
     for(let j=0;j<4;j++){const h=q*5.1+j,x=c+(hash(h)*1.8-.9)*w/2,ph=Math.sin(t*1.6+h*3);ctx.beginPath();ctx.arc(x,y+ph*2*U,(8+hash(h+1)*10)*U,Math.PI*1.15,Math.PI*1.85);ctx.stroke()}}
 }
 function riverWmid(){return riverW(G.k.s)/2}
+function drawFinish(){
+  const s=G.finishAt,y=sy(s);if(y<-120||y>H+120)return;
+  const w=riverW(s),e=cx(s)-w/2,n=Math.max(8,Math.round(w/(26*U))),cw=w/n;
+  for(let i=0;i<n;i++){ctx.fillStyle=i%2?'#16262a':'#f5f1e6';ctx.fillRect(e+i*cw,y-6*U,cw,6*U);ctx.fillStyle=i%2?'#f5f1e6':'#16262a';ctx.fillRect(e+i*cw,y,cw,6*U)}
+  [e,e+w].forEach(px=>{ctx.fillStyle='#d9442b';ctx.fillRect(px-3*U,y-46*U,6*U,52*U);ctx.fillStyle='#f5f1e6';ctx.beginPath();ctx.moveTo(px+3*U,y-46*U);ctx.lineTo(px+22*U,y-40*U+Math.sin(t*6)*2*U);ctx.lineTo(px+3*U,y-34*U);ctx.fill()});
+  ctx.font=`700 ${15*U+3}px Onest,sans-serif`;ctx.textAlign='center';const txt='ФИНИШ';const tw=ctx.measureText(txt).width+26;
+  ctx.fillStyle='rgba(22,38,42,.75)';ctx.beginPath();ctx.roundRect(cx(s)-tw/2,y-44*U,tw,26*U,13*U);ctx.fill();ctx.fillStyle='#f4b41a';ctx.fillText(txt,cx(s),y-26*U);ctx.textAlign='left';
+}
 function drawCamp(cp){
   const y=sy(cp.s);if(y<-120||y>H+120)return;const e=cx(cp.s)-riverW(cp.s)/2;
   ctx.setLineDash([8*U,8*U]);ctx.strokeStyle=cp.done?'rgba(244,180,26,.3)':'rgba(244,180,26,.8)';ctx.lineWidth=2.5*U;ctx.beginPath();ctx.moveTo(e,y);ctx.lineTo(e+riverW(cp.s),y);ctx.stroke();ctx.setLineDash([]);
@@ -677,6 +710,7 @@ function draw(rdt){
   if(G.hmel>20&&!RM){ctx.translate(W/2,H/2);ctx.rotate(Math.sin(t*.9)*G.hmel*.0005);ctx.translate(-W/2,-H/2)}
   drawWorld();
   for(const f of G.fx)if(f.ring){ctx.strokeStyle=`rgba(245,241,230,${f.life*.3})`;ctx.lineWidth=1.3*U;ctx.beginPath();ctx.ellipse(f.x,sy(f.s),f.r,f.r*.6,0,0,6.28);ctx.stroke()}
+  drawFinish();
   G.camps.forEach(drawCamp);
   G.objs.filter(o=>!o.pick||o.type==='oar').forEach(drawObj);G.objs.filter(o=>o.pick&&o.type!=='oar').forEach(drawObj);
   drawKayak();
@@ -703,7 +737,7 @@ function hud(){
   set('oars',G.k.oars.join(''),()=>[...$('oars').children].forEach((e,i)=>e.classList.toggle('lost',!G.k.oars[i])));
   set('hm',Math.round(G.hmel),v=>$('hmel').style.width=v+'%');
   const b=[];if(G.gena>0)b.push('Гена поёт: очки ×2, ещё '+Math.ceil(G.gena)+' с');if(G.capt>0)b.push('Капитан Виктор: путь чист, ещё '+Math.ceil(G.capt)+' с');
-  if(G.boostX2)b.push('Бустер: очки ×2 до лагеря');if(G.k.shield>0)b.push('Бустер: щит');if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
+  if(state==='play'&&!G.finished)b.push('До финиша: '+Math.max(0,Math.round((G.finishAt-G.k.s)/M())).toLocaleString('ru')+' м');if(G.boostX2)b.push('Бустер: очки ×2 до лагеря');if(G.k.shield>0)b.push('Бустер: щит');if(G.tow>0)b.push('На буксире: очки на паузе, ещё '+Math.ceil(G.tow)+' с');if(G.instr>0)b.push('Инструктор рядом: удары без потери очков');if(continuesLeft>0)b.push(G.lastCamp?'Возвращений в лагерь: '+continuesLeft:'Жизней про запас: '+continuesLeft+', нужен лагерь');
   set('buff',b.join('|'),()=>$('buff').innerHTML=b.map(s=>'<div>'+s+'</div>').join(''));
 }
 
