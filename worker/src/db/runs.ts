@@ -26,6 +26,8 @@ export interface NewRun {
   startedAt: number;
   rejected: string | null;
   stats?: RunStats;
+  mode?: 'free' | 'week';
+  week?: string | null;
 }
 
 export interface Best {
@@ -52,13 +54,14 @@ export async function insertRun(db: D1Database, run: NewRun, now: number): Promi
   const res = await db
     .prepare(
       `INSERT INTO runs (tg_id, level, bank, onboard, meters, duration_ms, oars_lost, rejected,
-                         started_at, created_at, gena, bottles, camps, sanchez)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+                         started_at, created_at, gena, bottles, camps, sanchez, mode, week)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
        RETURNING id`,
     )
     .bind(run.tgId, run.level, run.bank, run.onboard, run.meters, run.durationMs,
           run.oarsLost, run.rejected, run.startedAt, now,
-          run.stats?.gena ?? 0, run.stats?.bottles ?? 0, run.stats?.camps ?? 0, run.stats?.sanchez ?? 0)
+          run.stats?.gena ?? 0, run.stats?.bottles ?? 0, run.stats?.camps ?? 0, run.stats?.sanchez ?? 0,
+          run.mode ?? 'free', run.week ?? null)
     .first<{ id: number }>();
   if (!res) throw new Error('заплыв не сохранился');
   return res.id;
