@@ -26,6 +26,7 @@ export function loadGame(file = INDEX_HTML, { weekInfo = null } = {}) {
     beginRun: typeof beginRun === 'undefined' ? null : beginRun,
     get continuesLeft(){ return continuesLeft },
     get state(){ return state },
+    hudVisible: typeof hudVisible === 'undefined' ? null : hudVisible,
     get held(){ return held },
     get simT(){ return simT },
     setSimT(v){ simT = v },
