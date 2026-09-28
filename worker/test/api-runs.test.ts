@@ -253,6 +253,7 @@ describe('финиш и время', () => {
 
   it.each([
     ['быстрее физики (80 м/с)', { timeMs: 50_000 }],
+    ['быстрее честного предела (47,6 м/с)', { timeMs: 84_000 }],
     ['не дотянул до финиша по метрам', { meters: 3999 }],
     ['время больше времени заплыва', { timeMs: 203_000 }],
     ['нулевое время', { timeMs: 0 }],
@@ -264,6 +265,11 @@ describe('финиш и время', () => {
     expect(d.finish).toBeUndefined();
     expect((await dbRow()).finished).toBe(0);
     expect(await bestTime()).toBeNull();
+  });
+
+  it('на самом быстром честном темпе (46 м/с) финиш принимается', async () => {
+    const d = (await (await finishRun({ timeMs: 86_900, durationMs: 90_000 })).json<any>()).data;
+    expect(d.finish).toMatchObject({ timeMs: 86_900 });
   });
 
   it('на «Шторме» финиш дольше 330 секунд не принимается', async () => {
