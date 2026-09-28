@@ -35,6 +35,7 @@ export async function sendMessage(
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify({
         chat_id: chatId,
         text,

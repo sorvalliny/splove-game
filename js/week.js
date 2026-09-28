@@ -66,7 +66,9 @@ async function load() {
 /** Конец недели: пока сервер не переключил неделю, перезапрашиваем не чаще раза в 5 секунд. */
 function tick() {
   const line = $('weekLine');
-  if (!data || !line) return;
+  // Первая загрузка могла не удаться (нет связи при открытии): пробуем снова по таймеру.
+  if (!data) { if (!loading && Date.now() - lastFetchAt >= RETRY_MS) load(); return; }
+  if (!line) return;
   const left = data.endsAt * 1000 - nowMs();
   line.textContent = lineText();
   if (left <= 0 && !loading && Date.now() - lastFetchAt >= RETRY_MS) load();
@@ -94,6 +96,9 @@ globalThis.consumeBooster = consumeBooster;
 export async function initWeek() {
   if (!inTelegram()) return;
   armed = null;
+  data = null;
+  offsetMs = 0;
+  lastFetchAt = 0;
   $('boosterRow')?.addEventListener('click', (e) => {
     const b = e.target.closest?.('button[data-k]');
     if (!b) return;
@@ -102,5 +107,5 @@ export async function initWeek() {
   });
   await load();
   stopWeekTimer();
-  if (data) timer = setInterval(tick, 1000);
+  timer = setInterval(tick, 1000);
 }

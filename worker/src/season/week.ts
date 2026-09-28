@@ -6,7 +6,7 @@ export type BoosterKind = (typeof BOOSTER_KINDS)[number];
 
 export const BOOSTER_TITLES: Record<BoosterKind, string> = {
   shield: 'Щит: первый удар за заплыв не отнимает ни весло, ни очки',
-  x2: 'Удвоение: очки ×2 до первого лагеря',
+  x2: 'Удвоение: очки за метры, бутылки и борщ ×2 до первого лагеря',
   life: 'Запасное возвращение в лагерь',
 };
 

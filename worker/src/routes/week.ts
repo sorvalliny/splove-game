@@ -24,6 +24,7 @@ export async function handleWeek(req: Request, env: Env): Promise<Response> {
   ]);
 
   return ok({
+    now,
     weekKey,
     seed: weekSeed(weekIndex(now)),
     level: 'normal',

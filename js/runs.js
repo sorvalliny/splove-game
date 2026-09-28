@@ -22,7 +22,9 @@ const say = (text) => { document.getElementById('rT').textContent = text; };
 const BOOSTER_NAMES = { shield: 'Щит', x2: 'Удвоение', life: 'Запасное возвращение' };
 
 function weekText(d, run) {
-  const parts = [d.isRecord ? `Рекорд недели ${run.bank}` : `Твой лучший за неделю ${d.best?.bank ?? 0}`, `${d.rank}-е место`];
+  if (d.weekly?.stale) return 'Заплыв прошлой недели записан, но в таблицу недели не попал';
+  const parts = [d.isRecord ? `Рекорд недели ${run.bank}` : `Твой лучший за неделю ${d.best?.bank ?? 0}`];
+  if (d.rank) parts.push(`${d.rank}-е место`);
   if (d.weekly?.points) parts.push(`+${d.weekly.points} баллов`);
   if (d.weekly?.booster) parts.push(`получен бустер: ${BOOSTER_NAMES[d.weekly.booster]}`);
   return parts.join('. ');
@@ -30,7 +32,7 @@ function weekText(d, run) {
 
 export function resultText(d, run) {
   if (d.rejected) return REJECT_TEXT[d.rejected] ?? 'Результат не засчитан';
-  if (run.mode === 'week') return weekText(d, run);
+  if (run.mode === 'week' && d.weekly) return weekText(d, run);
   if (d.isRecord) return `Личный рекорд. ${d.rank}-е место на «${run.levelName}»`;
   const miss = d.delta === null ? null : -d.delta;
   const tail = miss && miss > 0 ? `, не хватило ${miss}` : '';

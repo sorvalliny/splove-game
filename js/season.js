@@ -2,7 +2,7 @@ import { inTelegram } from './auth.js';
 import { season as fetchSeason } from './api.js';
 import { formatCountdown } from './season-format.js';
 import { questsHtml, boardHtml, champsHtml, weekBoardHtml } from './season-render.js';
-import { weekData } from './week.js';
+import { weekData, refreshWeek } from './week.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -98,7 +98,7 @@ async function openScreen() {
   el.classList.remove('hide');
   paintScreen();
   try {
-    await load();
+    await Promise.all([load(), refreshWeek()]);
     paintScreen();
   } catch {
     /* остаёмся на прежних данных */

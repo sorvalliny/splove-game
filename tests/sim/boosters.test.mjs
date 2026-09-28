@@ -24,6 +24,23 @@ test('щит гасит первый удар: весло и очки целы, 
   assert.ok(t.G.onb < 500, 'и сжёг очки');
 });
 
+test('щит не тратится, если удар и так прикрыл инструктор', () => {
+  const { t } = boot();
+  t.beginRun('free', 'shield');
+  t.G.instr = 5;
+  t.hit({});
+  assert.equal(t.G.k.shield, 1, 'щит цел');
+});
+
+test('после заплыва недели выбранная сложность возвращается', () => {
+  const { t } = boot({ weekInfo: () => ({ seed: 5, key: '2026-W41' }) });
+  t.setLevel('hard');
+  t.beginRun('week', null);
+  assert.equal(t.level, 'normal');
+  t.beginRun('free', null);
+  assert.equal(t.level, 'hard', 'обычный заплыв идёт на выбранной сложности, а не на «Сплаве»');
+});
+
 test('без щита первый удар обычный', () => {
   const { t } = boot();
   t.beginRun('free', null);

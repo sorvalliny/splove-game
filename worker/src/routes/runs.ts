@@ -96,7 +96,7 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
     const owed = known.rejected === null ? await awardQuests(env.DB, tgId, nowSec) : [];
     if (known.mode === 'week' && known.week) {
       const weekly = known.rejected === null
-        ? await awardWeekPlay(env.DB, tgId, known.created_at, known.week)
+        ? await awardWeekPlay(env.DB, tgId, known.created_at, known.week, known.meters)
         : { points: 0, booster: null };
       return ok(await weekOutcome(env, tgId, known.week, known.bank, known.rejected as Rejection | null, false, owed, weekly));
     }
@@ -111,7 +111,10 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
 
   // Заплыв недели засчитывается, только если клиент назвал ключ текущей недели.
   const curWeek = isoWeekKey(nowSec);
-  const isWeek = body.mode === 'week' && body.week === curWeek;
+  // Неделя заплыва — та, в которой он начат: ключ, присланный клиентом, и время старта обязаны совпасть с текущей.
+  const wantsWeek = body.mode === 'week';
+  const isWeek = wantsWeek && body.week === curWeek && isoWeekKey(Math.floor(body.startedAt / 1000)) === curWeek;
+  const stale = wantsWeek && !isWeek; // чаще всего заплыв из офлайн-очереди после смены недели
   const prevWeekBest = isWeek ? await myWeek(env.DB, tgId, curWeek) : null;
 
   const runId = await insertRun(env.DB, {
@@ -126,12 +129,22 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
     ? false
     : isWeek
       ? !prevWeekBest || body.bank > prevWeekBest.bank
-      : await applyBest(env.DB, tgId, body.level, body.bank, body.meters, runId, nowSec);
+      : stale
+        ? false
+        : await applyBest(env.DB, tgId, body.level, body.bank, body.meters, runId, nowSec);
 
   const newQuests = rejected ? [] : await awardQuests(env.DB, tgId, nowSec);
 
+  if (stale) {
+    return ok({
+      rejected, isRecord: false, best: null, delta: null, rank: null, board: [],
+      newQuests: newQuests.map(({ id, title, points }) => ({ id, title, points })),
+      weekly: { points: 0, booster: null, stale: true },
+    });
+  }
+
   if (isWeek) {
-    const weekly = rejected ? { points: 0, booster: null } : await awardWeekPlay(env.DB, tgId, nowSec, curWeek);
+    const weekly = rejected ? { points: 0, booster: null } : await awardWeekPlay(env.DB, tgId, nowSec, curWeek, body.meters);
     return ok(await weekOutcome(env, tgId, curWeek, body.bank, rejected as Rejection | null, isRecord, newQuests, weekly));
   }
 

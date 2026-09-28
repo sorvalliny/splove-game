@@ -373,12 +373,12 @@ addEventListener('keydown',e=>{const k=e.key;
   if(k==='m'||k==='ь')toggleSheet()});
 // Экраны «Сезон» и «Рейтинг» лежат поверх меню: Enter и Пробел под ними не должны запускать заплыв.
 const overlayOpen=()=>['seasonScreen','board'].some(id=>{const el=$(id);return el&&!el.classList.contains('hide')});
-let runMode='free',runWeek=null,starting=false;
+let runMode='free',runWeek=null,starting=false,pickedLV=null; // pickedLV: сложность, выбранная игроком, пока идёт заплыв недели
 /** Начало заплыва без звука: режим «неделя» берёт зерно и сложность из недели, бустер применяется к этому заплыву. */
 function beginRun(mode,boost){
   const week=mode==='week'?globalThis.weekInfo?.():null;
-  if(week){LV='normal';runSeed=week.seed;runWeek=week.key;runMode='week'}
-  else{runSeed=(Math.random()*4294967296)>>>0;runWeek=null;runMode='free'}
+  if(week){if(pickedLV===null)pickedLV=LV;LV='normal';runSeed=week.seed;runWeek=week.key;runMode='week'}
+  else{if(pickedLV!==null){LV=pickedLV;pickedLV=null}runSeed=(Math.random()*4294967296)>>>0;runWeek=null;runMode='free'}
   simT=0;simTick=0;acc=0;reset(runSeed);G.tip=7;runStartedAt=Date.now();continuesLeft=CONTINUES;runFinalized=false;
   if(boost==='shield')G.k.shield=1;else if(boost==='x2')G.boostX2=1;else if(boost==='life')continuesLeft++;
   G.boost=boost||null;
@@ -388,7 +388,7 @@ function startRun(mode,boost){audio();if(AC.state==='suspended')AC.resume();begi
 async function begin(mode){
   if(starting||state==='play')return;starting=true;
   try{const boost=(await globalThis.consumeBooster?.())??null;startRun(mode,boost)}finally{starting=false}}
-$('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
+$('lvl').querySelectorAll('button').forEach(b=>b.onclick=()=>{pickedLV=null;LV=b.dataset.l;$('lvl').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));globalThis.onLevelPick?.(LV)});
 // Проба воспроизводимости: прогоняет чистую симуляцию без ввода и возвращает
 // отпечаток состояния. Два вызова с одним seed обязаны совпасть до числа.
 globalThis.__simProbe=(seed,steps)=>{
@@ -434,6 +434,7 @@ function finishRun(m){
     durationMs:Date.now()-runStartedAt, oarsLost:G.oarsLost, startedAt:runStartedAt,
     levelName:D().name, stats:{...G.st}, mode:runMode, week:runWeek,
   });
+  if(pickedLV!==null){LV=pickedLV;pickedLV=null} // заплыв недели шёл на «Сплаве»: возвращаем выбор игрока
 }
 
 /** Возврат в последний лагерь: та же река, те же очки, свежие вёсла. */
@@ -459,7 +460,7 @@ function splash(x,s,n,sp=90){for(let i=0;i<n;i++){const a=Math.random()*6.28,v=(
 function puff(x,s){for(let i=0;i<14;i++){const a=Math.random()*6.28,v=(30+Math.random()*80)*U;G.fx.push({x,s,vx:Math.cos(a)*v,vs:Math.sin(a)*v,z:0,vz:0,life:1,puff:1})}}
 function hit(o){
   const k=G.k;if(k.inv>0)return;
-  if(k.shield>0){k.shield=0;k.inv=D().inv;G.flash=.2;sfx.hit();floatT('Щит спас!',k.x,k.s+70*U,'#9fe0c8');return}
+  if(k.shield>0&&!(G.instr>0)){k.shield=0;k.inv=D().inv;G.flash=.2;sfx.hit();floatT('Щит спас!',k.x,k.s+70*U,'#9fe0c8');return}
   k.inv=D().inv;sfx.hit();G.shake=12;G.flash=.35;
   const have=k.oars.map((v,i)=>v?i:-1).filter(i=>i>=0);
   if(have.length){const i=have[Math.floor(rnd()*have.length)];k.oars[i]=0;G.oarsLost++;G.objs.push({type:'lostoar',x:k.x+(i-1)*14*U,s:k.s,seed:rnd()*9,vx:(rnd()-.5)*60*U,life:3})}

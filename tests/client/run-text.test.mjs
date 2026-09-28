@@ -28,6 +28,17 @@ test('заплыв недели без рекорда: показывает лу
   assert.doesNotMatch(text, /баллов|бустер/);
 });
 
+test('заплыв недели без места не пишет «null-е место»', () => {
+  const text = resultText({ ...base, rank: null, weekly: { points: 0, booster: null } }, { mode: 'week', bank: 100 });
+  assert.doesNotMatch(text, /null/);
+});
+
+test('заплыв прошлой недели: объясняет, что в таблицу он не попал', () => {
+  const text = resultText({ ...base, rank: null, best: null, weekly: { points: 0, booster: null, stale: true } }, { mode: 'week', bank: 100 });
+  assert.match(text, /прошлой недели/);
+  assert.doesNotMatch(text, /null/);
+});
+
 test('отклонённый заплыв недели объясняет причину', () => {
   assert.match(resultText({ ...base, rejected: 'too_fast' }, { mode: 'week', bank: 1 }), /слишком быстро/);
 });

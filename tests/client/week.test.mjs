@@ -100,6 +100,25 @@ test('игра получает зерно и ключ недели через w
   assert.deepEqual(globalThis.weekInfo(), { seed: 999, key: '2026-W42' });
 });
 
+test('если первая загрузка не удалась, повтор идёт по таймеру и кнопка появляется', async () => {
+  mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1_000_000 });
+  els.startWeek.hidden = true;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    if (calls === 1) return { json: async () => ({ ok: false, data: null, error: { code: 'x', message: 'x' } }) };
+    return { json: async () => ({ ok: true, error: null, data: week() }) };
+  };
+  await initWeek();
+  assert.equal(els.startWeek.hidden, true, 'после неудачи кнопки нет');
+  for (let i = 0; i < 8; i++) { mock.timers.tick(1000); await Promise.resolve(); await Promise.resolve(); }
+  await new Promise((r) => setImmediate(r));
+  stopWeekTimer();
+  mock.timers.reset();
+  assert.ok(calls >= 2, `запросов ${calls}`);
+  assert.equal(els.startWeek.hidden, false, 'после повтора кнопка появилась');
+});
+
 test('ошибка сервера: кнопки недели скрыты', async () => {
   els.startWeek.hidden = true;
   globalThis.fetch = async () => ({ json: async () => ({ ok: false, data: null, error: { code: 'x', message: 'x' } }) });

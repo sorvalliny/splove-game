@@ -124,6 +124,33 @@ describe('closeWeek: итог недели в чат', () => {
     expect(sent[0].text).not.toMatch(/<b(?!>|\/)/);
   });
 
+  it('в чаты отправляется не больше десяти, лишние отбрасываются', async () => {
+    for (let i = 2; i <= 14; i++) await registerChat(env.DB, -100 - i, `Чат ${i}`, 'supergroup', 1000 + i);
+    const r = await closeWeek(on, sec('2026-10-12T00:05:00'));
+    expect(r.posted).toBe(10);
+    expect(sent.length).toBe(10);
+  });
+
+  it('подпись общего зачёта не выдаёт годовые баллы за сезонные', async () => {
+    await closeWeek(on, sec('2026-10-12T00:05:00'));
+    expect(sent[0].text).toContain('Общий зачёт');
+    expect(sent[0].text).not.toContain('Сезон «');
+  });
+
+  it('если отправка не удалась ни в один чат, метка снимается и итог уйдёт при следующем запуске', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: false, description: 'down' }))));
+    const first = await closeWeek(on, sec('2026-10-12T00:05:00'));
+    expect(first.posted).toBe(0);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM posts').first<any>()).n).toBe(0);
+
+    vi.stubGlobal('fetch', vi.fn(async (_u: string, init?: RequestInit) => {
+      sent.push(JSON.parse(init!.body as string));
+      return new Response(JSON.stringify({ ok: true, result: {} }));
+    }));
+    const second = await closeWeek(on, sec('2026-10-12T00:10:00'));
+    expect(second.posted).toBe(1);
+  });
+
   it('неделя без заплывов не порождает сообщения', async () => {
     await closeWeek(on, sec('2026-10-19T00:05:00'));          // закрывается W42, в ней никто не играл
     expect(sent.length).toBe(0);

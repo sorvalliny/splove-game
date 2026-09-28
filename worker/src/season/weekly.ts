@@ -14,7 +14,14 @@ export interface WeekPlay { points: number; booster: BoosterKind | null }
  * Участие в заплыве недели: +50 баллов и один бустер за неделю. Идемпотентно.
  * Сезон определяется по времени заплыва, а не по «сейчас»: повтор из офлайн-очереди не сдвигает неделю.
  */
-export async function awardWeekPlay(db: D1Database, tgId: number, at: number, weekKey: string): Promise<WeekPlay> {
+/** Заплыв короче первого лагеря участия не даёт: иначе баллы и бустер добываются одним запросом за секунду. */
+export const MIN_WEEK_PLAY_M = 400;
+const MAX_POST_CHATS = 10;
+
+export async function awardWeekPlay(
+  db: D1Database, tgId: number, at: number, weekKey: string, meters: number,
+): Promise<WeekPlay> {
+  if (meters < MIN_WEEK_PLAY_M) return { points: 0, booster: null };
   const season = activeSeason(at, await getSeasons(db));
   if (!season) return { points: 0, booster: null };
   const paid = await addPoints(db, tgId, season.id, `w:${season.id}:${weekKey}:play`, WEEK_POINTS.play, at);
@@ -24,27 +31,29 @@ export async function awardWeekPlay(db: D1Database, tgId: number, at: number, we
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-async function summaryText(db: D1Database, week: string, seasonTitle: string): Promise<string | null> {
+async function summaryText(db: D1Database, week: string): Promise<string | null> {
   const top = await weekBoard(db, week, 3);
   if (top.length === 0) return null;
   const weekLines = top.map((r, i) => `${MEDALS[i]} ${escHtml(r.name)} — ${r.bank.toLocaleString('ru')}`);
   const seasonLines = (await totalsBoard(db, 3)).map((r, i) => `${i + 1}. ${escHtml(r.name)} — ${r.points.toLocaleString('ru')}`);
-  const season = seasonLines.length ? `\n\nСезон «${escHtml(seasonTitle)}», по баллам:\n${seasonLines.join('\n')}` : '';
-  return `<b>Итоги недели ${week.slice(5)}</b>\n${weekLines.join('\n')}${season}`;
+  const overall = seasonLines.length ? `\n\nОбщий зачёт по баллам:\n${seasonLines.join('\n')}` : '';
+  return `<b>Итоги недели ${week.slice(5)}</b>\n${weekLines.join('\n')}${overall}`;
 }
 
 /** Итог недели уходит в активные чаты один раз. Пока переменная WEEKLY_POST не равна «on», не отправляется ничего. */
-async function postSummary(env: Env, week: string, seasonTitle: string, now: number): Promise<number> {
+async function postSummary(env: Env, week: string, now: number): Promise<number> {
   if (env.WEEKLY_POST !== 'on') return 0;
-  const chats = await activeChats(env.DB);
+  const chats = (await activeChats(env.DB)).slice(0, MAX_POST_CHATS);
   if (chats.length === 0) return 0;
-  const text = await summaryText(env.DB, week, seasonTitle);
+  const text = await summaryText(env.DB, week);
   if (!text) return 0;
 
   const mark = await env.DB.prepare('INSERT OR IGNORE INTO posts (key, at) VALUES (?1, ?2)').bind(`week:${week}`, now).run();
   if (mark.meta.changes !== 1) return 0;
   let sent = 0;
   for (const chat of chats) if (await sendMessage(env.BOT_TOKEN, chat.chat_id, text)) sent++;
+  // Ни один чат не получил: снимаем метку, чтобы следующий запуск попробовал снова.
+  if (sent === 0) await env.DB.prepare('DELETE FROM posts WHERE key = ?').bind(`week:${week}`).run();
   return sent;
 }
 
@@ -64,5 +73,5 @@ export async function closeWeek(env: Env, now: number): Promise<{ week: string; 
     const fresh = await addPoints(env.DB, top[i].tg_id, season.id, `w:${season.id}:${week}:top${i + 1}`, WEEK_POINTS.top[i], now);
     if (fresh) awarded++;
   }
-  return { week, awarded, posted: await postSummary(env, week, season.title, now) };
+  return { week, awarded, posted: await postSummary(env, week, now) };
 }

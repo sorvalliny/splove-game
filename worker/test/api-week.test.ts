@@ -73,12 +73,46 @@ describe('заплыв недели: POST /api/runs', () => {
     expect(await count('boosters')).toBe(1);
   });
 
-  it('чужой ключ недели считается обычным заплывом', async () => {
+  // Заплыв на 5 секунд одним запросом не должен приносить баллы и бустер: это бесплатная накрутка.
+  it('короче первого лагеря (400 м) участия и бустера не даёт, в таблицу недели попадает', async () => {
     at('2026-10-06T12:00:00');
-    await run({ week: '2026-W40' });
-    expect((await env.DB.prepare('SELECT mode, week FROM runs').first<any>())).toEqual({ mode: 'free', week: null });
-    expect(await count('bests')).toBe(1);
+    const d = (await (await run({ meters: 399, durationMs: 30_000 })).json<any>()).data;
+    expect(d.rejected).toBeNull();
+    expect(d.weekly).toEqual({ points: 0, booster: null });
     expect(await count('points', "key LIKE 'w:%'")).toBe(0);
+    expect(await count('boosters')).toBe(0);
+    expect(d.rank).toBe(1);
+  });
+
+  it('ровно 400 м уже даёт участие', async () => {
+    at('2026-10-06T12:00:00');
+    const d = (await (await run({ meters: 400, durationMs: 30_000 })).json<any>()).data;
+    expect(d.weekly.points).toBe(50);
+  });
+
+  it('заплыв, начатый на прошлой неделе, не засчитывается в текущую, даже с ключом текущей', async () => {
+    at('2026-10-06T12:00:00');
+    await run({ startedAt: Date.parse('2026-10-04T12:00:00+03:00') });   // воскресенье W40
+    expect((await env.DB.prepare('SELECT mode, week FROM runs').first<any>())).toEqual({ mode: 'free', week: null });
+    expect(await count('points', "key LIKE 'w:%'")).toBe(0);
+  });
+
+  // Такой заплыв обычно приходит из офлайн-очереди: он записывается, но ни в таблицу сложности, ни в таблицу недели не идёт.
+  it('заплыв чужой недели записывается как обычный, но таблиц и баллов не трогает', async () => {
+    at('2026-10-06T12:00:00');
+    const d = (await (await run({ week: '2026-W40' })).json<any>()).data;
+    expect((await env.DB.prepare('SELECT mode, week FROM runs').first<any>())).toEqual({ mode: 'free', week: null });
+    expect(await count('bests')).toBe(0);
+    expect(await count('points', "key LIKE 'w:%'")).toBe(0);
+    expect(d.weekly).toEqual({ points: 0, booster: null, stale: true });
+    expect(d.rank).toBeNull();
+    expect(d.rejected).toBeNull();
+  });
+
+  it('обычный заплыв (без режима недели) по-прежнему обновляет таблицу сложности', async () => {
+    at('2026-10-06T12:00:00');
+    await run({ mode: 'free', week: null });
+    expect(await count('bests')).toBe(1);
   });
 
   it('отклонённый заплыв недели баллов и бустера не даёт', async () => {
@@ -144,6 +178,12 @@ describe('POST /api/week', () => {
     expect(d.me).toEqual({ bank: 700, rank: 2 });
     expect(JSON.stringify(d.board)).not.toContain('tg_id');
     expect(Object.values(d.boosters).reduce((a: number, b: any) => a + b, 0)).toBe(1);
+  });
+
+  it('сервер отдаёт своё время, чтобы таймер шёл по нему', async () => {
+    at('2026-10-06T12:00:00');
+    const d = (await (await post('/api/week')).json<any>()).data;
+    expect(d.now).toBe(sec('2026-10-06T12:00:00'));
   });
 
   it('открытие пишет визит; без подписи 401', async () => {
