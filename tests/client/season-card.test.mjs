@@ -1,10 +1,13 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 // auth.js читает Telegram при загрузке модуля, поэтому заглушки ставим до импорта.
 globalThis.Telegram = { WebApp: { initData: 'x', ready() {}, expand() {} } };
 const el = { hidden: true, innerHTML: '' };
-globalThis.document = { getElementById: (id) => (id === 'seasonCard' ? el : null) };
+const timerEl = { textContent: '' };
+globalThis.document = {
+  getElementById: (id) => (id === 'seasonCard' ? el : id === 'seasonTimer' ? timerEl : null),
+};
 
 const { initSeason, stopSeasonTimer } = await import('../../js/season.js');
 
@@ -50,4 +53,39 @@ test('ошибка сервера карточку не ломает и не п�
   globalThis.fetch = async () => ({ json: async () => ({ ok: false, data: null, error: { code: 'x', message: 'x' } }) });
   await initSeason();
   assert.equal(el.hidden, true);
+});
+
+// Часы клиента могут забежать на задержку сети вперёд: время вышло, а сервер ещё говорит «до».
+test('если время вышло, а сервер ещё «до», карточка продолжает перезапрашивать', async () => {
+  mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1_000_000 });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    return { json: async () => ({ ok: true, error: null, data: {
+      now: STARTS - 1, season: { title: 'Осень', state: 'before', startsAt: STARTS, day: 0, days: 92 }, me } }) };
+  };
+  await initSeason();
+  assert.equal(calls, 1);
+  for (let i = 0; i < 12; i++) { mock.timers.tick(1000); await Promise.resolve(); await Promise.resolve(); }
+  await new Promise((r) => setImmediate(r));
+  stopSeasonTimer();
+  mock.timers.reset();
+  assert.ok(calls >= 3, `запросов было ${calls}, ожидали не меньше 3`);
+});
+
+test('когда сервер сказал «идёт», перезапросы прекращаются', async () => {
+  mock.timers.enable({ apis: ['setInterval', 'Date'], now: 1_000_000 });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    const state = calls === 1 ? 'before' : 'active';
+    return { json: async () => ({ ok: true, error: null, data: {
+      now: STARTS - 1, season: { title: 'Осень', state, startsAt: STARTS, day: state === 'active' ? 1 : 0, days: 92 }, me } }) };
+  };
+  await initSeason();
+  for (let i = 0; i < 12; i++) { mock.timers.tick(1000); await Promise.resolve(); await Promise.resolve(); }
+  await new Promise((r) => setImmediate(r));
+  stopSeasonTimer();
+  mock.timers.reset();
+  assert.equal(calls, 2);
 });

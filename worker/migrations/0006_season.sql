@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS points (
   at        INTEGER NOT NULL,
   UNIQUE (tg_id, key)
 );
+CREATE INDEX IF NOT EXISTS idx_points_season ON points (season_id, tg_id);
 
 ALTER TABLE runs    ADD COLUMN gena    INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE runs    ADD COLUMN bottles INTEGER NOT NULL DEFAULT 0;

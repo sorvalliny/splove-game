@@ -56,7 +56,7 @@ export async function totalsBoard(db: D1Database, limit: number, seasonId: strin
     .prepare(
       `SELECT t.tg_id, p.name, p.username, t.points, t.last_at
        FROM (${TOTALS}) t JOIN players p ON p.tg_id = t.tg_id
-       ORDER BY t.points DESC, t.last_at ASC LIMIT ?2`,
+       ORDER BY t.points DESC, t.last_at ASC, t.tg_id ASC LIMIT ?2`,
     )
     .bind(seasonId, limit)
     .all<PointsRow>();

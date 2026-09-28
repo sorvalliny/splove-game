@@ -109,6 +109,18 @@ describe('POST /api/season', () => {
     expect(d.me.rank).toBe(2);
   });
 
+  it('при равных баллах и равном времени порядок стабилен: по возрастанию id', async () => {
+    at('2026-10-05T12:00:00');
+    await player(ME, 'Виктор');
+    await player(5, 'Аня');
+    const t = sec('2026-10-05T11:00:00');
+    await give(ME, 400, 'a', t);
+    await give(5, 400, 'b', t);
+    const names = async () => (await getData()).board.map((r: any) => r.name);
+    expect(await names()).toEqual(['Аня', 'Виктор']);
+    expect(await names()).toEqual(['Аня', 'Виктор']);
+  });
+
   it('забаненный пропадает из таблицы и не сдвигает место', async () => {
     at('2026-10-05T12:00:00');
     await player(ME, 'Виктор');

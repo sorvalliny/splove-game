@@ -66,4 +66,15 @@ describe('правдоподобие заплыва', () => {
     const ancient = { ...good, startedAt: now - 31 * 24 * 3600 * 1000 };
     expect(checkRun(ancient, now)).toBe('bad_clock');
   });
+
+  // Длительность приходит от клиента: без потолка одним запросом можно нарисовать любой счёт.
+  it('час — предел длительности заплыва', () => {
+    const hour = { ...good, durationMs: 3_600_000, startedAt: now - 3_600_000 };
+    expect(checkRun(hour, now)).toBeNull();
+    expect(checkRun({ ...hour, durationMs: 3_600_001 }, now)).toBe('bad_numbers');
+  });
+
+  it('астрономическая длительность отклоняется', () => {
+    expect(checkRun({ ...good, durationMs: 1e12, meters: 10 }, now)).toBe('bad_numbers');
+  });
 });

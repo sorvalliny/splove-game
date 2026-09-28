@@ -13,9 +13,12 @@ describe('sanitizeStats', () => {
     expect(sanitizeStats({ gena: 1, bottles: max + 1, camps: 1 }, meters)).toEqual(ZERO_STATS);
   });
 
-  it('Гена не чаще раза на километр, плюс один', () => {
-    expect(sanitizeStats({ gena: 2, bottles: 0, camps: 0 }, 1000).gena).toBe(2);
-    expect(sanitizeStats({ gena: 3, bottles: 0, camps: 0 }, 1000)).toEqual(ZERO_STATS);
+  it('Гена: первый не раньше 540 м, дальше не чаще раза на километр', () => {
+    expect(sanitizeStats({ gena: 1, bottles: 0, camps: 0 }, 539)).toEqual(ZERO_STATS);
+    expect(sanitizeStats({ gena: 1, bottles: 0, camps: 0 }, 540).gena).toBe(1);
+    expect(sanitizeStats({ gena: 2, bottles: 0, camps: 0 }, 1539)).toEqual(ZERO_STATS);
+    expect(sanitizeStats({ gena: 2, bottles: 0, camps: 0 }, 1540).gena).toBe(2);
+    expect(sanitizeStats({ gena: 0, bottles: 0, camps: 0 }, 100).gena).toBe(0);
   });
 
   it('лагеря считаются по расстановке: первый на 400 м, дальше через 500', () => {

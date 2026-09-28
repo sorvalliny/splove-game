@@ -57,8 +57,10 @@ export function wireRuns(profile) {
       return;
     }
 
-    say(resultText(r.data, run));
+    const done = (r.data.newQuests ?? []).map((q) => `${q.title} +${q.points}`);
+    say(done.length ? `${resultText(r.data, run)}. Задание выполнено: ${done.join(', ')}` : resultText(r.data, run));
     if (r.data.best) globalThis.updateBest?.(run.level, r.data.best);
+    globalThis.refreshSeason?.();
   };
 
   document.getElementById('toBoard')?.addEventListener('click', () => show(lastLevel, 'over'));

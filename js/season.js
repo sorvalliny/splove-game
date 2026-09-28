@@ -8,7 +8,11 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
 let data = null;
 let offsetMs = 0;
 let timer = null;
-let refetched = false;
+let loading = false;
+let lastFetchAt = 0;
+
+/** Часы клиента могут забежать вперёд сервера на задержку сети: пока сервер говорит «до», спрашиваем снова. */
+const RETRY_MS = 5000;
 
 const card = () => document.getElementById('seasonCard');
 const nowMs = () => Date.now() + offsetMs;
@@ -26,12 +30,12 @@ function html(d) {
   if (s.state === 'ended') {
     return `<div class="sTitle"><span>Сезон закончился</span></div>`;
   }
-  const pct = Math.min(100, Math.round((s.day / s.days) * 100));
+  const pct = Math.min(100, Math.max(0, Math.round((Number(s.day) / Number(s.days)) * 100)));
   const mine = d.me.total > 0
-    ? `Твои баллы: <b>${d.me.total.toLocaleString('ru')}</b>${d.me.rank ? ` · место ${d.me.rank}` : ''}`
+    ? `Твои баллы: <b>${Number(d.me.total).toLocaleString('ru')}</b>${d.me.rank ? ` · место ${Number(d.me.rank)}` : ''}`
     : 'Баллов пока нет';
   return `
-    <div class="sTitle"><span>${esc(s.title)} · день ${s.day} из ${s.days}</span></div>
+    <div class="sTitle"><span>${esc(s.title)} · день ${Number(s.day)} из ${Number(s.days)}</span></div>
     <div class="sBar"><i style="width:${pct}%"></i></div>
     <small>${mine}</small>`;
 }
@@ -44,7 +48,7 @@ function stopTimer() {
   timer = null;
 }
 
-/** До старта таймер тикает по времени сервера; когда время вышло, один раз перезапрашиваем сезон. */
+/** До старта таймер тикает по времени сервера; когда время вышло, а сервер ещё «до», перезапрашиваем. */
 function tick() {
   const s = data?.season;
   const el = document.getElementById('seasonTimer');
@@ -52,30 +56,39 @@ function tick() {
 
   const left = s.startsAt * 1000 - nowMs();
   el.textContent = formatCountdown(left);
-  if (left <= 0 && !refetched) {
-    refetched = true;
-    stopTimer();
-    load();
-  }
+  if (left <= 0 && !loading && Date.now() - lastFetchAt >= RETRY_MS) load();
 }
 
 function paint() {
   const el = card();
   if (!el) return;
-  if (!data?.season) { el.hidden = true; return; }
+  if (!data?.season) { el.hidden = true; stopTimer(); return; }
   el.innerHTML = html(data);
   el.hidden = false;
-  stopTimer();
-  if (data.season.state === 'before') timer = setInterval(tick, 1000);
+  if (data.season.state === 'before') {
+    if (!timer) timer = setInterval(tick, 1000);
+  } else {
+    stopTimer();
+  }
 }
 
 async function load() {
-  const r = await fetchSeason();
-  if (!r.ok) return;
-  data = r.data;
-  offsetMs = data.now * 1000 - Date.now();
-  paint();
+  loading = true;
+  lastFetchAt = Date.now();
+  try {
+    const r = await fetchSeason();
+    if (!r.ok) return;
+    data = r.data;
+    offsetMs = data.now * 1000 - Date.now();
+    paint();
+  } finally {
+    loading = false;
+  }
 }
+
+/** Баллы и место меняются после заплыва: игра вызывает это, чтобы карточка не устаревала. */
+export const refreshSeason = () => (inTelegram() ? load() : Promise.resolve());
+globalThis.refreshSeason = refreshSeason;
 
 export async function initSeason() {
   if (!inTelegram()) return;
