@@ -235,6 +235,7 @@ function reset(seed){
   const s0=rnd()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
+    st:{gena:0,bottles:0,camps:0},stSnap:{gena:0,bottles:0}, // для заданий сезона; gena выше — таймер, а не счётчик
     objs:[],camps:[],fx:[],texts:[],npc:null,
     nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+FIRST_CAMP_M*11*U,campGap:CAMP_GAP_M*11*U,lastCamp:null};
   lyric=[];hudCache={};
@@ -332,7 +333,7 @@ function finishRun(m){
   globalThis.onRunEnd?.({
     level:LV, bank:Math.round(G.bank), onboard:Math.round(G.onb), meters:m??meters(),
     durationMs:Date.now()-runStartedAt, oarsLost:G.oarsLost, startedAt:runStartedAt,
-    levelName:D().name,
+    levelName:D().name, stats:{...G.st},
   });
 }
 
@@ -346,6 +347,8 @@ function continueRun(){
   G.onb=0;G.objs=[];G.texts=[];G.fx=[];G.npc=null;G.instr=0;G.tow=0;
   G.nObs=at+H*1.1;G.nPick=at+H*.9;
   G.camps=G.camps.filter(c=>c.s>at);
+  // Зона после лагеря рассыпается заново: без отката бутылки и Гену засчитали бы дважды.
+  G.st.gena=G.stSnap.gena;G.st.bottles=G.stSnap.bottles;
   state='play';$('over').classList.add('hide');
 }
 
@@ -365,11 +368,11 @@ function hit(o){
 function collect(o){
   const k=G.k;o.dead=1;
   const mult=G.gena>0?2:1;
-  if(o.type==='beer'){G.onb+=40*mult;G.hmel=Math.min(100,G.hmel+12);sfx.bottle();floatT('пиво +'+40*mult,o.x,o.s)}
-  if(o.type==='wine'){G.onb+=100*mult;G.hmel=Math.min(100,G.hmel+26);sfx.bottle();floatT('вино +'+100*mult,o.x,o.s)}
-  if(o.type==='teq'){G.onb+=180*mult;G.hmel=Math.min(100,G.hmel+42);k.F+=70*U;sfx.bottle();floatT('текила +'+180*mult,o.x,o.s)}
+  if(o.type==='beer'){G.st.bottles++;G.onb+=40*mult;G.hmel=Math.min(100,G.hmel+12);sfx.bottle();floatT('пиво +'+40*mult,o.x,o.s)}
+  if(o.type==='wine'){G.st.bottles++;G.onb+=100*mult;G.hmel=Math.min(100,G.hmel+26);sfx.bottle();floatT('вино +'+100*mult,o.x,o.s)}
+  if(o.type==='teq'){G.st.bottles++;G.onb+=180*mult;G.hmel=Math.min(100,G.hmel+42);k.F+=70*U;sfx.bottle();floatT('текила +'+180*mult,o.x,o.s)}
   if(o.type==='oar'){const i=k.oars.indexOf(0);if(i>=0){k.oars[i]=1;floatT('весло выловили',o.x,o.s)}else{G.onb+=30;floatT('запасное +30',o.x,o.s)}sfx.pick(3)}
-  if(o.type==='gena'){G.gena=22;G.lyr=0;sfx.pick(4);const extra=continuesLeft<CONTINUES+2;if(extra)continuesLeft++;floatT(extra?'Гена на борту! +1 возвращение':'Гена на борту!',o.x,o.s,'#f4b41a');markTrack()}
+  if(o.type==='gena'){G.st.gena++;G.gena=22;G.lyr=0;sfx.pick(4);const extra=continuesLeft<CONTINUES+2;if(extra)continuesLeft++;floatT(extra?'Гена на борту! +1 возвращение':'Гена на борту!',o.x,o.s,'#f4b41a');markTrack()}
   if(o.type==='capt'){G.capt=9;sfx.horn();floatT('Капитан Виктор ведёт!',k.x,k.s+120*U,'#f4b41a');
     G.objs.forEach(b=>{if(!b.pick&&b.type!=='lostoar'&&Math.abs(b.s-k.s)<H*1.6){b.dead=1;puff(b.x,b.s)}})}
   if(o.type==='boat'){G.tow=10;G.towX=o.x;sfx.motor();floatT('Катер зацепил!',k.x,k.s+120*U,'#f4b41a')}
@@ -414,7 +417,7 @@ function update(dt){
   }
   G.objs=G.objs.filter(o=>!o.dead&&o.s>k.s-H*.7);
   // camps
-  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
+  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
