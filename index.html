@@ -266,6 +266,14 @@ const FIRST_CAMP_M=400; // первый лагерь, метров от стар
 const CAMP_GAP_M=500;   // дальше лагерь каждые столько метров: раньше расстояние удваивалось
 const TOW_GRACE=3;      // секунд неуязвимости после катера
 const TOW_CLEAR_SCREENS=1.4; // на сколько экранов вперёд катер расчищает воду при отцепе
+// Ступень = сколько лагерей пройдено. Всё, что зависит от ступени, настраивается здесь.
+const STAGE={
+  cap:10,          // после этой ступени рост прекращается
+  gapStep:.04,     // на столько сжимается расстояние между препятствиями за ступень
+  speedStep:.03,   // на столько ускоряется течение за ступень
+  netFrom:3,       // сеть рыбаков: перегон 4
+  jetFrom:4,       // гидроцикл: перегон 5
+  borschFrom:1, banyaFrom:1, sanchezFrom:2};
 const CONTINUES=2; // столько раз за заплыв можно вернуться в последний лагерь
 const CAMPS=['Ширяево','Жигули','Самарская Лука','Молодецкий курган','Царёв курган','Усинский залив','Хвалынь'];
 function reset(seed){
@@ -273,7 +281,8 @@ function reset(seed){
   const s0=rnd()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
-    st:{gena:0,bottles:0,camps:0},stSnap:{gena:0,bottles:0}, // для заданий сезона; gena выше — таймер, а не счётчик
+    stage:0,nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
+    st:{gena:0,bottles:0,camps:0,sanchez:0},stSnap:{gena:0,bottles:0,sanchez:0}, // для заданий сезона; gena выше — таймер, а не счётчик
     objs:[],camps:[],fx:[],texts:[],npc:null,
     nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+FIRST_CAMP_M*11*U,campGap:CAMP_GAP_M*11*U,lastCamp:null};
   lyric=[];hudCache={};
@@ -288,21 +297,38 @@ function circlesFor(o){
   else if(o.type==='buoy')c.push([0,0,11*U]);
   else if(o.type==='bar'){for(let i=-2;i<=2;i++)c.push([i*o.rx*.38,0,o.rs*(1-Math.abs(i)*.18)])}
   else if(o.type==='barge'){for(let i=-2;i<=2;i++)c.push([0,i*48*U,30*U])}
+  else if(o.type==='net'){ // поплавки поперёк реки с одним проходом шириной 120·U
+    const half=o.w/2,gapHalf=60*U;
+    for(let dx=-half;dx<=half;dx+=30*U){if(Math.abs(dx-o.gapDx)<gapHalf)continue;c.push([dx,0,8*U])}}
+  else if(o.type==='jet')c.push([0,0,14*U]);
   return c;
 }
+function netObj(s){return{type:'net',s,x:cx(s),w:riverW(s),gapDx:(rnd()-.5)*riverW(s)*.5,rot:0,seed:rnd()*99,vs:0}}
+function jetObj(s){return{type:'jet',s,x:place(rnd()*1.1-.55,s),rot:0,seed:rnd()*99,vs:0,vx:(rnd()<.5?-1:1)*110*U}}
 function spawn(){
   const k=G.k,m=meters(),d=Math.min(1,m/D().ramp),ahead=k.s+H*1.5;
-  while(G.nObs<ahead){const s=G.nObs;
-    const ms=(s-k.s0)/M();if(G.capt<=0&&ms>D().grace){const r=rnd();let type=r<.4?'log':r<.66?'buoy':r<.86||ms<D().barge?'bar':'barge';if(ms<D().grace+400&&type==='bar')type='buoy';
-      const o={type,s,x:place(rnd()*1.6-.8,s),rot:rnd()*3,seed:rnd()*99,vs:type==='barge'?-55*U:0};
-      if(type==='bar'){const bs=.55+.45*d;o.rx=(70+rnd()*80)*U*bs;o.rs=(26+rnd()*18)*U*bs;o.x=place(rnd()*1.1-.55,s)}
-      if(type==='barge')o.x=place(rnd()*1.2-.6,s+300*U),o.s=s+300*U;
-      o.c=circlesFor(o);G.objs.push(o)}
-    G.nObs+=lerp(460,190,d)*U*D().gap*(.65+rnd()*.7)}
-  while(G.nPick<ahead){const s=G.nPick,r=rnd(),lowOar=k.oars.includes(0);
-    const type=r<(lowOar?D().oar:.06)?'oar':r<.55?'beer':r<.8?'wine':'teq';
+  const gapMul=1-STAGE.gapStep*Math.min(G.stage,STAGE.cap); // на ступени 0 ровно 1: сеяная симуляция не меняется
+  while(G.nObs<ahead){const s=G.nObs;let netEnd=0;
+    const ms=(s-k.s0)/M();if(G.capt<=0&&ms>D().grace){
+      // Один бросок, как и раньше: новые типы берут начало отрезка, остальное пересчитывается. Ниже ступени 3 сдвиг равен 0.
+      const off=(G.stage>=STAGE.netFrom?.12:0)+(G.stage>=STAGE.jetFrom?.10:0);let r=rnd();
+      if(r<off){const o=r<.12?netObj(s):jetObj(s);o.c=circlesFor(o);G.objs.push(o);if(o.type==='net')netEnd=s+300*U}
+      else{r=(r-off)/(1-off);let type=r<.4?'log':r<.66?'buoy':r<.86||ms<D().barge?'bar':'barge';if(ms<D().grace+400&&type==='bar')type='buoy';
+        const o={type,s,x:place(rnd()*1.6-.8,s),rot:rnd()*3,seed:rnd()*99,vs:type==='barge'?-55*U:0};
+        if(type==='bar'){const bs=.55+.45*d;o.rx=(70+rnd()*80)*U*bs;o.rs=(26+rnd()*18)*U*bs;o.x=place(rnd()*1.1-.55,s)}
+        if(type==='barge')o.x=place(rnd()*1.2-.6,s+300*U),o.s=s+300*U;
+        o.c=circlesFor(o);G.objs.push(o)}}
+    G.nObs+=lerp(460,190,d)*U*D().gap*(.65+rnd()*.7)*gapMul;
+    if(netEnd)G.nObs=Math.max(G.nObs,netEnd)} // за сетью 300·U чистой воды: иначе коса могла бы перекрыть проход
+  while(G.nPick<ahead){const s=G.nPick,lowOar=k.oars.includes(0);let r=rnd();
+    const off=G.stage>=STAGE.borschFrom?.08:0;let type;
+    if(r<off)type='borsch';else{r=(r-off)/(1-off);type=r<(lowOar?D().oar:.06)?'oar':r<.55?'beer':r<.8?'wine':'teq'}
     G.objs.push({type,s,x:place(rnd()*1.6-.8,s),seed:rnd()*99,pick:1});G.nPick+=(300+rnd()*260)*U}
   if(G.nGena<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+rnd()*7000)*U}
+  if(G.stage>=STAGE.banyaFrom){if(G.nBanya===null)G.nBanya=ahead+400*11*U;
+    if(G.nBanya<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'banya',s:G.nBanya,x:place(sd*.86,G.nBanya),side:sd,seed:4,pick:1});G.nBanya+=(800+rnd()*400)*11*U}}
+  if(G.stage>=STAGE.sanchezFrom){if(G.nSanchez===null)G.nSanchez=ahead+900*11*U;
+    if(G.nSanchez<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'sanchez',s:G.nSanchez,x:place(sd*.86,G.nSanchez),side:sd,seed:5,pick:1});G.nSanchez+=(2000+rnd()*1000)*11*U}}
   if(G.nCapt<ahead){G.objs.push({type:'capt',s:G.nCapt,x:place(rnd()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+rnd()*10000)*U}
   if(G.nBoat<ahead){G.objs.push({type:'boat',s:G.nBoat,x:place(rnd()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(rnd()<.5?-1:1)*40*U});G.nBoat+=(8000+rnd()*6000)*U}
   if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.nCamp+=G.campGap}
@@ -388,7 +414,7 @@ function continueRun(){
   G.nObs=at+H*1.1;G.nPick=at+H*.9;
   G.camps=G.camps.filter(c=>c.s>at);
   // Зона после лагеря рассыпается заново: без отката бутылки и Гену засчитали бы дважды.
-  G.st.gena=G.stSnap.gena;G.st.bottles=G.stSnap.bottles;
+  G.st.gena=G.stSnap.gena;G.st.bottles=G.stSnap.bottles;G.st.sanchez=G.stSnap.sanchez;
   state='play';$('over').classList.add('hide');
 }
 
@@ -415,6 +441,9 @@ function collect(o){
   if(o.type==='gena'){G.st.gena++;G.gena=22;G.lyr=0;sfx.pick(4);const extra=continuesLeft<CONTINUES+2;if(extra)continuesLeft++;floatT(extra?'Гена на борту! +1 возвращение':'Гена на борту!',o.x,o.s,'#f4b41a');markTrack()}
   if(o.type==='capt'){G.capt=9;sfx.horn();floatT('Капитан Виктор ведёт!',k.x,k.s+120*U,'#f4b41a');
     G.objs.forEach(b=>{if(!b.pick&&b.type!=='lostoar'&&Math.abs(b.s-k.s)<H*1.6){b.dead=1;puff(b.x,b.s)}})}
+  if(o.type==='borsch'){G.onb+=150*mult;G.hmel=Math.min(100,G.hmel+40);sfx.bottle();floatT('борщ с водкой +'+150*mult,o.x,o.s)}
+  if(o.type==='banya'){G.hmel=0;sfx.pick(4);floatT('Баня: хмель как рукой сняло',o.x,o.s,'#9fe0c8')}
+  if(o.type==='sanchez'){G.st.sanchez++;G.onb+=999;G.hmel=Math.min(100,G.hmel+35);sfx.pick(4);floatT('Уха от Дяди Санчеза +999',o.x,o.s,'#f4b41a')}
   if(o.type==='boat'){G.tow=10;G.towX=o.x;sfx.motor();floatT('Катер зацепил!',k.x,k.s+120*U,'#f4b41a')}
 }
 
@@ -424,7 +453,7 @@ function update(dt){
   const k=G.k,m=meters(),d=Math.min(1,m/D().ramp);G.tip=Math.max(0,(G.tip||0)-dt);
   G.hmel=Math.max(0,G.hmel-2.2*dt);G.gena=Math.max(0,G.gena-dt);G.capt=Math.max(0,G.capt-dt);G.instr=Math.max(0,G.instr-dt);
   if(G._gena>0&&G.gena===0){floatT('Гена сошёл на берег',k.x,k.s+100*U);markTrack()}G._gena=G.gena;
-  const w=riverW(k.s),c=cx(k.s),u=(k.x-c)/(w/2),cur=(40+d*30)*U*D().speed*(1-.3*u*u),cvx=slope(k.s)*cur;
+  const w=riverW(k.s),c=cx(k.s),u=(k.x-c)/(w/2),cur=(40+d*30)*U*D().speed*(1-.3*u*u)*(1+STAGE.speedStep*Math.min(G.stage,STAGE.cap)),cvx=slope(k.s)*cur;
   if(G.tow>0){
     G.tow-=dt;k.ang=Math.sin(simT*7)*.24+Math.sin(simT*2.3)*.1;k.x=lerp(k.x,c+Math.sin(simT*.9)*w*.15,dt*1.5);k.s+=(cur+390*U)*dt;k.kvx=k.kvs=0;
     if(Math.random()<dt*18)splash(k.x+(Math.random()-.5)*20*U,k.s-40*U,2,60);
@@ -449,7 +478,7 @@ function update(dt){
   for(const o of G.objs){
     if(o.vs)o.s+=o.vs*dt;if(o.vx){o.x+=o.vx*dt;const oc=cx(o.s),ow=riverW(o.s)/2*.85;if(Math.abs(o.x-oc)>ow)o.vx*=-1}
     if(o.type==='lostoar'){o.life-=dt;if(o.life<=0)o.dead=1;continue}
-    if(o.pick){const rr=(o.type==='gena'||o.type==='capt'?52:o.type==='boat'?40:22)*U;
+    if(o.pick){const rr=(o.type==='banya'?60:o.type==='gena'||o.type==='capt'||o.type==='sanchez'?52:o.type==='boat'?40:22)*U;
       if(Math.hypot(bow[0]-o.x,bow[1]-o.s)<rr||Math.hypot(k.x-o.x,k.s-o.s)<rr)collect(o);continue}
     if(G.tow>0||G.capt>0)continue;
     for(const cc of o.c){const ox=o.x+cc[0],os=o.s+cc[1];for(const p of [bow,[k.x,k.s],str]){const dx=p[0]-ox,ds=p[1]-os,dd=Math.hypot(dx,ds),min=cc[2]*D().hit+12*U;
@@ -457,7 +486,7 @@ function update(dt){
   }
   G.objs=G.objs.filter(o=>!o.dead&&o.s>k.s-H*.7);
   // camps
-  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
+  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:
@@ -549,6 +578,30 @@ function drawObj(o){
     ctx.fillStyle='#d9442b';ctx.fillRect(0,-50*U,1.5*U,-22*U);ctx.beginPath();ctx.moveTo(1.5*U,-72*U);ctx.lineTo(16*U,-66*U+Math.sin(t*6)*2*U);ctx.lineTo(1.5*U,-60*U);ctx.fill();ctx.restore();
     const g=.5+.5*Math.sin(t*3);ctx.strokeStyle=`rgba(244,180,26,${.3+g*.4})`;ctx.lineWidth=3*U;ctx.beginPath();ctx.ellipse(x,y,44*U,76*U,0,0,6.28);ctx.stroke();
     speech(x,y-80*U,'Капитан Виктор',1,'#16262a','rgba(244,180,26,.95)');break}
+  case'net':{const at=(c,i)=>[x+c[0],y+Math.sin(t*2+i)*1.5*U];
+    ctx.strokeStyle='rgba(245,241,230,.6)';ctx.lineWidth=1.6*U;ctx.beginPath();
+    o.c.forEach((c,i)=>{const [px,py]=at(c,i);const prev=o.c[i-1];if(prev&&c[0]-prev[0]<40*U)ctx.lineTo(px,py);else ctx.moveTo(px,py)});ctx.stroke();
+    o.c.forEach((c,i)=>{const [px,py]=at(c,i);ctx.fillStyle='rgba(20,40,40,.3)';ctx.beginPath();ctx.arc(px+2*U,py+3*U,7*U,0,6.28);ctx.fill();ctx.fillStyle='#ff8a2a';ctx.beginPath();ctx.arc(px,py,7*U,0,6.28);ctx.fill();ctx.fillStyle='#f5f1e6';ctx.beginPath();ctx.arc(px,py,3*U,0,6.28);ctx.fill()});break}
+  case'jet':{ctx.save();ctx.translate(x,y+bob);ctx.rotate(Math.sign(o.vx)*.5);ctx.fillStyle='rgba(245,241,230,.45)';ctx.beginPath();ctx.moveTo(-6*U,14*U);ctx.lineTo(-16*U,44*U);ctx.lineTo(16*U,44*U);ctx.lineTo(6*U,14*U);ctx.fill();
+    ctx.fillStyle='#d9442b';ctx.beginPath();ctx.moveTo(0,-20*U);ctx.bezierCurveTo(12*U,-10*U,11*U,10*U,8*U,16*U);ctx.lineTo(-8*U,16*U);ctx.bezierCurveTo(-11*U,10*U,-12*U,-10*U,0,-20*U);ctx.fill();
+    ctx.fillStyle='#f5f1e6';ctx.fillRect(-4*U,-8*U,8*U,10*U);ctx.fillStyle='#16262a';ctx.fillRect(-3*U,4*U,6*U,6*U);ctx.restore();ring(22*U,.3);break}
+  case'borsch':{ring(20*U,.45);ctx.fillStyle='rgba(20,40,40,.3)';ctx.beginPath();ctx.ellipse(x+3*U,y+5*U+bob,14*U,9*U,0,0,6.28);ctx.fill();
+    ctx.fillStyle='#f5f1e6';ctx.beginPath();ctx.ellipse(x,y+bob,14*U,9*U,0,0,6.28);ctx.fill();ctx.fillStyle='#b8321f';ctx.beginPath();ctx.ellipse(x,y-1*U+bob,10.5*U,6.5*U,0,0,6.28);ctx.fill();
+    ctx.fillStyle='#f5f1e6';ctx.beginPath();ctx.arc(x,y-1*U+bob,3*U,0,6.28);ctx.fill();
+    for(let i=0;i<3;i++){const p=(t*.7+i/3)%1;ctx.fillStyle=`rgba(240,240,240,${(1-p)*.4})`;ctx.beginPath();ctx.arc(x+(i-1)*5*U,y-8*U-p*18*U+bob,(3+p*4)*U,0,6.28);ctx.fill()}break}
+  case'banya':{ctx.fillStyle='rgba(20,40,40,.3)';ctx.beginPath();ctx.ellipse(x+6*U,y+8*U,46*U,26*U,0,0,6.28);ctx.fill();
+    ctx.fillStyle='#7a5432';ctx.fillRect(x-32*U,y-18*U,64*U,38*U);ctx.fillStyle='#5c3d22';for(let i=0;i<4;i++)ctx.fillRect(x-32*U,y-18*U+i*9.5*U,64*U,1.4*U);
+    ctx.fillStyle='#3c2a1a';ctx.beginPath();ctx.moveTo(x-38*U,y-16*U);ctx.lineTo(x,y-38*U);ctx.lineTo(x+38*U,y-16*U);ctx.fill();
+    ctx.fillStyle='#e8c98a';ctx.fillRect(x-7*U,y-2*U,14*U,22*U);ctx.fillStyle='#8a8a8a';ctx.fillRect(x+16*U,y-44*U,6*U,14*U);
+    for(let i=0;i<4;i++){const p=(t*.4+i/4)%1;ctx.fillStyle=`rgba(240,240,240,${(1-p)*.5})`;ctx.beginPath();ctx.arc(x+19*U+Math.sin(p*7+i)*5*U,y-46*U-p*48*U,(4+p*11)*U,0,6.28);ctx.fill()}
+    speech(x,y-64*U,'Баня: пар снимет хмель');break}
+  case'sanchez':{ctx.fillStyle='rgba(228,207,152,.9)';ctx.beginPath();ctx.ellipse(x,y,44*U,22*U,0,0,6.28);ctx.fill();
+    const fl=.7+.3*Math.sin(t*14+o.seed);ctx.fillStyle='rgba(255,170,60,.25)';ctx.beginPath();ctx.arc(x-14*U,y+2*U,22*U*fl,0,6.28);ctx.fill();
+    ctx.fillStyle='#ff8a2a';ctx.beginPath();ctx.arc(x-14*U,y+2*U,7*U*fl,0,6.28);ctx.fill();ctx.fillStyle='#ffd35a';ctx.beginPath();ctx.arc(x-14*U,y+2*U,3.5*U,0,6.28);ctx.fill();
+    ctx.fillStyle='#2b2b2b';ctx.beginPath();ctx.ellipse(x-14*U,y-8*U,10*U,7*U,0,0,6.28);ctx.fill();ctx.fillStyle='#c9c9c9';ctx.beginPath();ctx.ellipse(x-14*U,y-11*U,8*U,3.5*U,0,0,6.28);ctx.fill();
+    ctx.fillStyle='#3b6fb0';ctx.beginPath();ctx.arc(x+14*U,y+2*U,9*U,0,6.28);ctx.fill();ctx.fillStyle='#e8b98f';ctx.beginPath();ctx.arc(x+14*U,y-2*U,6*U,0,6.28);ctx.fill();
+    ctx.fillStyle='#5a3a1c';ctx.beginPath();ctx.arc(x+14*U,y-5*U,6.5*U,Math.PI,6.28);ctx.fill();ctx.fillRect(x+7*U,y-6*U,14*U,2*U);
+    speech(x,y-30*U,'Дядя Санчез: уха с водкой!');break}
   case'boat':{ctx.save();ctx.translate(x,y+bob);ctx.rotate(Math.sign(o.vx)*.3);ctx.fillStyle='rgba(245,241,230,.45)';ctx.beginPath();ctx.moveTo(-10*U,30*U);ctx.lineTo(-28*U,70*U);ctx.lineTo(28*U,70*U);ctx.lineTo(10*U,30*U);ctx.fill();
     ctx.fillStyle='#f5f1e6';ctx.beginPath();ctx.moveTo(0,-34*U);ctx.bezierCurveTo(18*U,-20*U,16*U,20*U,13*U,30*U);ctx.lineTo(-13*U,30*U);ctx.bezierCurveTo(-16*U,20*U,-18*U,-20*U,0,-34*U);ctx.fill();
     ctx.fillStyle='#2f7bbf';ctx.fillRect(-12*U,-6*U,24*U,6*U);ctx.fillStyle='#16262a';ctx.fillRect(-5*U,28*U,10*U,9*U);ctx.restore();speech(x,y-40*U,'Катер: цепляйтесь!',.9);break}
