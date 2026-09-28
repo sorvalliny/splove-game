@@ -137,3 +137,32 @@ describe('таблица рейтинга', () => {
     expect(await getRank(env.DB, 'easy', 10, 10, 1)).toBe(1);
   });
 });
+
+describe('статистика заплыва и забаненные', () => {
+  it('статистика сохраняется в колонках заплыва', async () => {
+    const id = await insertRun(env.DB, run({ stats: { gena: 1, bottles: 7, camps: 2 } }), 2000);
+    const row = await env.DB.prepare('SELECT gena, bottles, camps FROM runs WHERE id = ?').bind(id).first<any>();
+    expect(row).toEqual({ gena: 1, bottles: 7, camps: 2 });
+  });
+
+  it('без статистики в колонках нули', async () => {
+    const id = await insertRun(env.DB, run(), 2000);
+    const row = await env.DB.prepare('SELECT gena, bottles, camps FROM runs WHERE id = ?').bind(id).first<any>();
+    expect(row).toEqual({ gena: 0, bottles: 0, camps: 0 });
+  });
+
+  it('забаненный пропадает из таблицы и не сдвигает место', async () => {
+    const a = await insertRun(env.DB, run({ tgId: 1, bank: 900, startedAt: 1_000_000 }), 2000);
+    await applyBest(env.DB, 1, 'normal', 900, 500, a, 2000);
+    const b = await insertRun(env.DB, run({ tgId: 2, bank: 400, startedAt: 2_000_000 }), 2000);
+    await applyBest(env.DB, 2, 'normal', 400, 500, b, 2000);
+
+    expect((await getBoard(env.DB, 'normal', 10)).map((r) => r.tg_id)).toEqual([1, 2]);
+    expect(await getRank(env.DB, 'normal', 400, 500, 2000)).toBe(2);
+
+    await env.DB.prepare('UPDATE players SET banned = 1 WHERE tg_id = 1').run();
+
+    expect((await getBoard(env.DB, 'normal', 10)).map((r) => r.tg_id)).toEqual([2]);
+    expect(await getRank(env.DB, 'normal', 400, 500, 2000)).toBe(1);
+  });
+});

@@ -1,4 +1,5 @@
 import type { Level } from '../game/plausible';
+import type { RunStats } from '../game/stats';
 
 export interface RunRow {
   id: number;
@@ -24,6 +25,7 @@ export interface NewRun {
   oarsLost: number;
   startedAt: number;
   rejected: string | null;
+  stats?: RunStats;
 }
 
 export interface Best {
@@ -49,12 +51,14 @@ const BOARD_ORDER = 'ORDER BY b.bank DESC, b.meters DESC, b.updated_at ASC';
 export async function insertRun(db: D1Database, run: NewRun, now: number): Promise<number> {
   const res = await db
     .prepare(
-      `INSERT INTO runs (tg_id, level, bank, onboard, meters, duration_ms, oars_lost, rejected, started_at, created_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+      `INSERT INTO runs (tg_id, level, bank, onboard, meters, duration_ms, oars_lost, rejected,
+                         started_at, created_at, gena, bottles, camps)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
        RETURNING id`,
     )
     .bind(run.tgId, run.level, run.bank, run.onboard, run.meters, run.durationMs,
-          run.oarsLost, run.rejected, run.startedAt, now)
+          run.oarsLost, run.rejected, run.startedAt, now,
+          run.stats?.gena ?? 0, run.stats?.bottles ?? 0, run.stats?.camps ?? 0)
     .first<{ id: number }>();
   if (!res) throw new Error('заплыв не сохранился');
   return res.id;
@@ -123,7 +127,7 @@ export async function getBoard(db: D1Database, level: Level, limit: number): Pro
     .prepare(
       `SELECT p.tg_id, p.name, p.photo_url, b.bank, b.meters, b.updated_at
        FROM bests b JOIN players p ON p.tg_id = b.tg_id
-       WHERE b.level = ?1 ${BOARD_ORDER} LIMIT ?2`,
+       WHERE b.level = ?1 AND p.banned = 0 ${BOARD_ORDER} LIMIT ?2`,
     )
     .bind(level, limit)
     .all<BoardRow>();
@@ -136,11 +140,11 @@ export async function getRank(
 ): Promise<number> {
   const row = await db
     .prepare(
-      `SELECT COUNT(*) AS n FROM bests
-       WHERE level = ?1 AND (
-         bank > ?2
-         OR (bank = ?2 AND meters > ?3)
-         OR (bank = ?2 AND meters = ?3 AND updated_at < ?4)
+      `SELECT COUNT(*) AS n FROM bests b JOIN players p ON p.tg_id = b.tg_id
+       WHERE b.level = ?1 AND p.banned = 0 AND (
+         b.bank > ?2
+         OR (b.bank = ?2 AND b.meters > ?3)
+         OR (b.bank = ?2 AND b.meters = ?3 AND b.updated_at < ?4)
        )`,
     )
     .bind(level, bank, meters, updatedAt)
