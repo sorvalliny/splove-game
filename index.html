@@ -281,7 +281,7 @@ function reset(seed){
   const s0=rnd()*80000;
   G={k:{x:cx(s0),s:s0,ang:0,av:0,F:0,kvx:0,kvs:0,inv:0,oars:[1,1,1],s0,prevS:s0,ph:0},
     onb:0,bank:0,burned:0,hmel:0,gena:0,capt:0,tow:0,instr:0,lyr:0,campN:0,oarsLost:0,
-    stage:0,nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
+    stage:0,keep:[],nBanya:null,nSanchez:null, // счётчики появления пасхалок задаются на своей ступени, без rnd()
     st:{gena:0,bottles:0,camps:0,sanchez:0},stSnap:{gena:0,bottles:0,sanchez:0}, // для заданий сезона; gena выше — таймер, а не счётчик
     objs:[],camps:[],fx:[],texts:[],npc:null,
     nObs:s0+H*1.1,nPick:s0+H*.9,nGena:s0+6000*U,nCapt:s0+14000*U,nBoat:s0+9000*U,nCamp:s0+FIRST_CAMP_M*11*U,campGap:CAMP_GAP_M*11*U,lastCamp:null};
@@ -303,6 +303,8 @@ function circlesFor(o){
   else if(o.type==='jet')c.push([0,0,14*U]);
   return c;
 }
+/** Особые объекты (Гена, капитан, катер, баня, Санчез) запоминаются: возврат в лагерь стирает воду, но взятое снова можно взять. */
+const special=(o)=>{G.objs.push(o);G.keep.push({...o})};
 function netObj(s){return{type:'net',s,x:cx(s),w:riverW(s),gapDx:(rnd()-.5)*riverW(s)*.5,rot:0,seed:rnd()*99,vs:0}}
 function jetObj(s){return{type:'jet',s,x:place(rnd()*1.1-.55,s),rot:0,seed:rnd()*99,vs:0,vx:(rnd()<.5?-1:1)*110*U}}
 function spawn(){
@@ -312,7 +314,8 @@ function spawn(){
     const ms=(s-k.s0)/M();if(G.capt<=0&&ms>D().grace){
       // Один бросок, как и раньше: новые типы берут начало отрезка, остальное пересчитывается. Ниже ступени 3 сдвиг равен 0.
       const off=(G.stage>=STAGE.netFrom?.12:0)+(G.stage>=STAGE.jetFrom?.10:0);let r=rnd();
-      if(r<off){const o=r<.12?netObj(s):jetObj(s);o.c=circlesFor(o);G.objs.push(o);if(o.type==='net')netEnd=s+300*U}
+      if(r<off){const o=r<.12?netObj(s):jetObj(s);o.c=circlesFor(o);G.objs.push(o);
+        if(o.type==='net'){netEnd=s+450*U;G.objs=G.objs.filter(x=>!(x.type==='barge'&&Math.abs(x.s-s)<260*U))}} // баржа не должна закрыть проход
       else{r=(r-off)/(1-off);let type=r<.4?'log':r<.66?'buoy':r<.86||ms<D().barge?'bar':'barge';if(ms<D().grace+400&&type==='bar')type='buoy';
         const o={type,s,x:place(rnd()*1.6-.8,s),rot:rnd()*3,seed:rnd()*99,vs:type==='barge'?-55*U:0};
         if(type==='bar'){const bs=.55+.45*d;o.rx=(70+rnd()*80)*U*bs;o.rs=(26+rnd()*18)*U*bs;o.x=place(rnd()*1.1-.55,s)}
@@ -324,13 +327,13 @@ function spawn(){
     const off=G.stage>=STAGE.borschFrom?.08:0;let type;
     if(r<off)type='borsch';else{r=(r-off)/(1-off);type=r<(lowOar?D().oar:.06)?'oar':r<.55?'beer':r<.8?'wine':'teq'}
     G.objs.push({type,s,x:place(rnd()*1.6-.8,s),seed:rnd()*99,pick:1});G.nPick+=(300+rnd()*260)*U}
-  if(G.nGena<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+rnd()*7000)*U}
+  if(G.nGena<ahead){const sd=rnd()<.5?-1:1;special({type:'gena',s:G.nGena,x:place(sd*.86,G.nGena),side:sd,seed:1,pick:1});G.nGena+=(11000+rnd()*7000)*U}
   if(G.stage>=STAGE.banyaFrom){if(G.nBanya===null)G.nBanya=ahead+400*11*U;
-    if(G.nBanya<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'banya',s:G.nBanya,x:place(sd*.86,G.nBanya),side:sd,seed:4,pick:1});G.nBanya+=(800+rnd()*400)*11*U}}
+    if(G.nBanya<ahead){const sd=rnd()<.5?-1:1;special({type:'banya',s:G.nBanya,x:place(sd*.86,G.nBanya),side:sd,seed:4,pick:1});G.nBanya+=(800+rnd()*400)*11*U}}
   if(G.stage>=STAGE.sanchezFrom){if(G.nSanchez===null)G.nSanchez=ahead+900*11*U;
-    if(G.nSanchez<ahead){const sd=rnd()<.5?-1:1;G.objs.push({type:'sanchez',s:G.nSanchez,x:place(sd*.86,G.nSanchez),side:sd,seed:5,pick:1});G.nSanchez+=(2000+rnd()*1000)*11*U}}
-  if(G.nCapt<ahead){G.objs.push({type:'capt',s:G.nCapt,x:place(rnd()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+rnd()*10000)*U}
-  if(G.nBoat<ahead){G.objs.push({type:'boat',s:G.nBoat,x:place(rnd()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(rnd()<.5?-1:1)*40*U});G.nBoat+=(8000+rnd()*6000)*U}
+    if(G.nSanchez<ahead){const sd=rnd()<.5?-1:1;special({type:'sanchez',s:G.nSanchez,x:place(sd*.86,G.nSanchez),side:sd,seed:5,pick:1});G.nSanchez+=(2000+rnd()*1000)*11*U}}
+  if(G.nCapt<ahead){special({type:'capt',s:G.nCapt,x:place(rnd()*1-.5,G.nCapt),seed:2,pick:1});G.nCapt+=(18000+rnd()*10000)*U}
+  if(G.nBoat<ahead){special({type:'boat',s:G.nBoat,x:place(rnd()*1.2-.6,G.nBoat),seed:3,pick:1,vx:(rnd()<.5?-1:1)*40*U});G.nBoat+=(8000+rnd()*6000)*U}
   if(G.nCamp<ahead){G.camps.push({s:G.nCamp,name:CAMPS[G.campN++%CAMPS.length],done:0});G.nCamp+=G.campGap}
 }
 const meters=()=>Math.round((G.k.s-G.k.s0)/M());
@@ -413,6 +416,7 @@ function continueRun(){
   G.onb=0;G.objs=[];G.texts=[];G.fx=[];G.npc=null;G.instr=0;G.tow=0;
   G.nObs=at+H*1.1;G.nPick=at+H*.9;
   G.camps=G.camps.filter(c=>c.s>at);
+  G.keep=G.keep.filter(o=>o.s>at);for(const o of G.keep)G.objs.push({...o,dead:0}); // взятое до гибели можно взять снова: счётчики откатились
   // Зона после лагеря рассыпается заново: без отката бутылки и Гену засчитали бы дважды.
   G.st.gena=G.stSnap.gena;G.st.bottles=G.stSnap.bottles;G.st.sanchez=G.stSnap.sanchez;
   state='play';$('over').classList.add('hide');
@@ -486,7 +490,7 @@ function update(dt){
   }
   G.objs=G.objs.filter(o=>!o.dead&&o.s>k.s-H*.7);
   // camps
-  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
+  for(const cp of G.camps)if(!cp.done&&k.s>cp.s){cp.done=1;G.keep=G.keep.filter(x=>x.s>cp.s);G.stage++;G.st.camps++;G.stSnap={gena:G.st.gena,bottles:G.st.bottles,sanchez:G.st.sanchez};const add=Math.round(G.onb);G.bank+=add;G.onb=0;k.oars=[1,1,1];G.lastCamp={s:cp.s,name:cp.name};sfx.camp();floatT('Лагерь «'+cp.name+'»: +'+add+' в несгораемую',W/2,k.s+150*U,'#f4b41a')}
   G.camps=G.camps.filter(c=>c.s>k.s-H);
   // instructor
   // Инструктор выплывает из лагеря навстречу, а не по собственному таймеру:

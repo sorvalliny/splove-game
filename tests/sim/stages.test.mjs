@@ -46,7 +46,8 @@ test('препятствия чаще на высокой ступени и ро
   const n0 = obstacles(sow(fresh(), 0)).length;
   const n10 = obstacles(sow(fresh(), 10)).length;
   const n20 = obstacles(sow(fresh(), 20)).length;
-  assert.ok(n10 > n0 * 1.4, `ступень 10: ${n10}, ступень 0: ${n0}`);
+  // Чистая вода за сетью (450·U) съедает часть прироста, поэтому порог ниже теоретических 1,67.
+  assert.ok(n10 > n0 * 1.25, `ступень 10: ${n10}, ступень 0: ${n0}`);
   assert.equal(n20, n10, 'выше потолка рост прекращается');
 });
 
@@ -106,21 +107,55 @@ test('у сети один проход не уже 60·U на любой сло
   }
 });
 
-test('после сети 300·U без других препятствий', () => {
-  const objs = sow(fresh(9), 3, { meters: 30000 });
-  const U = 1; // проверяем в единицах, зависящих от t.U ниже
-  void U;
+test('после сети 450·U без других препятствий', () => {
   const t = fresh(9);
   const list = sow(t, 3, { meters: 30000 });
-  const M = 300 * t.U;
+  const M = 450 * t.U;
+  let nets = 0;
   list.forEach((o, i) => {
     if (o.type !== 'net') return;
+    nets++;
     for (const later of list.slice(i + 1)) {
       if (later.pick || later.type === 'lostoar') continue;
       assert.ok(later.s >= o.s + M - 1e-6, `после сети на ${o.s} пошло препятствие на ${later.s}`);
     }
   });
-  assert.ok(objs.length > 0);
+  assert.ok(nets > 0);
+});
+
+test('баржа не перекрывает проход сети: рядом с сетью барж нет', () => {
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
+    for (const level of ['normal', 'hard']) {
+      const t = fresh(seed, level);
+      const list = sow(t, 10, { level, meters: 25000, seed });
+      for (const net of list.filter((o) => o.type === 'net')) {
+        for (const barge of list.filter((o) => o.type === 'barge')) {
+          assert.ok(Math.abs(barge.s - net.s) >= 200 * t.U, `баржа в ${Math.abs(barge.s - net.s) / t.U}·U от сети (сид ${seed}, ${level})`);
+        }
+      }
+    }
+  }
+});
+
+test('возврат в лагерь возвращает уже появившиеся Гену, баню и Санчеза, чтобы их можно было взять снова', () => {
+  const t = fresh(5, 'easy');
+  t.G.stage = 2;
+  const G = t.G;
+  const startS = G.k.s;
+  for (let s = startS; s < startS + 6000 * 11 * t.U; s += 300) { G.k.s = s; t.spawn(); }
+  const ahead = G.objs.filter((o) => ['gena', 'banya', 'sanchez'].includes(o.type));
+  assert.ok(ahead.some((o) => o.type === 'sanchez'), 'Санчез в выборке');
+  const target = ahead.find((o) => o.type === 'sanchez');
+  // Игрок «взял» Санчеза и погиб позже; лагерь остался позади Санчеза.
+  target.dead = 1;
+  G.k.s = target.s + 100 * t.U;
+  G.lastCamp = { s: target.s - 200 * t.U, name: 'Тест' };
+  G.camps = [];
+  t.setCont(2);
+  t.continueRun();
+  const again = t.G.objs.filter((o) => o.type === 'sanchez' && Math.abs(o.s - target.s) < 1e-6);
+  assert.equal(again.length, 1, 'Санчез снова на реке');
+  assert.ok(!again[0].dead, 'и его снова можно взять');
 });
 
 test('гидроцикл идёт поперёк реки и остаётся внутри неё', () => {
