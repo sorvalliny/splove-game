@@ -1,5 +1,7 @@
 import type { Env } from '../index';
 import { sendMessage } from '../telegram/api';
+import { collectMetrics, formatMetrics } from '../season/metrics';
+import { totalsBoard } from '../db/season';
 
 interface AdminMessage {
   chat?: { id?: number; type?: string };
@@ -7,6 +9,9 @@ interface AdminMessage {
 }
 
 const ADMIN_COMMANDS = new Set(['/metrics', '/season', '/ban', '/unban']);
+
+/** Бот шлёт HTML, а имена задают пользователи: без экранирования имя ломает разметку. */
+const esc = (t: string): string => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
 
 const adminIds = (env: Env): number[] =>
   (env.ADMIN_IDS ?? '').split(',').map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0);
@@ -32,15 +37,30 @@ async function setBanned(env: Env, chatId: number, arg: string | undefined, bann
   if (!player) return reply(env, chatId, `Нет такого игрока: ${id}`);
 
   await env.DB.prepare('UPDATE players SET banned = ? WHERE tg_id = ?').bind(banned ? 1 : 0, id).run();
-  return reply(env, chatId, `${banned ? 'Забанен' : 'Разбанен'}: ${player.name} (${id})`);
+  return reply(env, chatId, `${banned ? 'Забанен' : 'Разбанен'}: ${esc(player.name)} (${id})`);
+}
+
+async function metricsReport(env: Env, chatId: number, now: number): Promise<Response> {
+  const size = Number(env.CHAT_SIZE);
+  const m = await collectMetrics(env.DB, now, Number.isInteger(size) && size > 0 ? size : null);
+  return reply(env, chatId, formatMetrics(m));
+}
+
+/** Общая таблица баллов с именами и @username: по ней вручную проверяют призёров. */
+async function seasonReport(env: Env, chatId: number): Promise<Response> {
+  const top = await totalsBoard(env.DB, 10);
+  if (top.length === 0) return reply(env, chatId, 'Баллов пока ни у кого нет');
+  const lines = top.map((r, i) =>
+    `${i + 1}. ${esc(r.name)}${r.username ? ` (@${esc(r.username)})` : ''} — ${r.points.toLocaleString('ru')}`);
+  return reply(env, chatId, `Топ сезона по общей сумме:\n${lines.join('\n')}`);
 }
 
 /**
- * Админские команды. Возвращает null, если команда не админская или ещё не реализована здесь;
+ * Админские команды. Возвращает null, если команда не админская;
  * для не-админа админская команда молча съедается: бот не признаётся, что она существует.
  */
 export async function handleAdmin(
-  cmd: string, args: string[], msg: AdminMessage, env: Env, _now: number,
+  cmd: string, args: string[], msg: AdminMessage, env: Env, now: number,
 ): Promise<Response | null> {
   if (!ADMIN_COMMANDS.has(cmd)) return null;
   if (!isAdmin(msg, env)) return new Response('ok');
@@ -48,5 +68,6 @@ export async function handleAdmin(
   const chatId = msg.chat!.id!;
   if (cmd === '/ban') return setBanned(env, chatId, args[0], true);
   if (cmd === '/unban') return setBanned(env, chatId, args[0], false);
-  return null;
+  if (cmd === '/metrics') return metricsReport(env, chatId, now);
+  return seasonReport(env, chatId);
 }

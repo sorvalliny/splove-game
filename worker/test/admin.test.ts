@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { upsertPlayer } from '../src/db/players';
+import { addPoints } from '../src/db/season';
 
 const ADMIN = 956875;
 const sent: any[] = [];
@@ -102,5 +103,47 @@ describe('/ban и /unban', () => {
     expect((await getBoard(env.DB, 'normal', 10)).length).toBe(0);
     await hook(message('/unban 123'));
     expect((await getBoard(env.DB, 'normal', 10)).length).toBe(1);
+  });
+});
+
+describe('/metrics и /season', () => {
+  it('/metrics присылает отчёт с ключевыми числами и без имён', async () => {
+    await hook(message('/metrics'));
+    expect(sent.length).toBe(1);
+    for (const part of ['DAU', 'Липкость', 'Удержание', 'Воронка']) expect(sent[0].text).toContain(part);
+    expect(sent[0].text).not.toContain('Аня');
+  });
+
+  it('/season без баллов сообщает, что их ни у кого нет', async () => {
+    await hook(message('/season'));
+    expect(sent[0].text).toContain('пока ни у кого нет');
+  });
+
+  it('/season показывает топ с именами, @username и баллами, забаненных нет', async () => {
+    await upsertPlayer(env.DB, { id: 124, first_name: 'Боря' }, 1000);
+    await addPoints(env.DB, 123, 'autumn-2026', 'a', 300, 2000);
+    await addPoints(env.DB, 124, 'autumn-2026', 'b', 500, 2000);
+    await hook(message('/season'));
+    const text: string = sent[0].text;
+    expect(text.indexOf('Боря')).toBeLessThan(text.indexOf('Аня'));
+    expect(text).toContain('@anya');
+    expect(text).toContain('300');
+
+    sent.length = 0;
+    await env.DB.prepare('UPDATE players SET banned = 1 WHERE tg_id = 124').run();
+    await hook(message('/season'));
+    expect(sent[0].text).not.toContain('Боря');
+  });
+
+  it('имена экранируются: бот шлёт HTML, а имя задаёт пользователь', async () => {
+    await upsertPlayer(env.DB, { id: 125, first_name: '<b>Хакер</b>' }, 1000);
+    await addPoints(env.DB, 125, 'autumn-2026', 'c', 100, 2000);
+    await hook(message('/season'));
+    expect(sent[0].text).not.toContain('<b>Хакер</b>');
+    expect(sent[0].text).toContain('&lt;b&gt;Хакер&lt;/b&gt;');
+
+    sent.length = 0;
+    await hook(message('/ban 125'));
+    expect(sent[0].text).toContain('&lt;b&gt;Хакер&lt;/b&gt;');
   });
 });
