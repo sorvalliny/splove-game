@@ -38,12 +38,14 @@ const sendRun = (over: Record<string, unknown> = {}, init = initData()) =>
   post('/api/runs', { ...base, startedAt: Date.now() - 60_000, ...over }, init);
 
 beforeEach(async () => {
+  await env.DB.prepare('DELETE FROM points').run();
+  await env.DB.prepare('DELETE FROM visits').run();
   await env.DB.prepare('DELETE FROM bests').run();
   await env.DB.prepare('DELETE FROM runs').run();
   await env.DB.prepare('DELETE FROM players').run();
   asMember();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('POST /api/runs', () => {
   it('честный заплыв засчитывается и даёт первое место', async () => {
@@ -150,5 +152,73 @@ describe('POST /api/session после заплывов', () => {
     expect(body.data.stats.runs).toBe(2);
     expect(body.data.stats.meters).toBe(1000);
     expect(body.data.stats.oarsLost).toBe(4);
+  });
+});
+
+describe('сезонные баллы за заплыв', () => {
+  // Понедельник 5 октября 2026 — неделя W41, задания: camp3, bottles10, km2.
+  const inSeason = () => vi.setSystemTime(new Date('2026-10-05T12:00:00+03:00'));
+  const camp3Run = { meters: 1500, bank: 300, onboard: 40, stats: { gena: 0, bottles: 0, camps: 3 } };
+  const savedStats = () =>
+    env.DB.prepare('SELECT gena, bottles, camps FROM runs').first<Record<string, number>>();
+  const pointsCount = async () =>
+    (await env.DB.prepare('SELECT COUNT(*) AS n FROM points').first<{ n: number }>())!.n;
+
+  it('заплыв, выполняющий задание недели, сообщает о нём и начисляет баллы', async () => {
+    inSeason();
+    const body = await (await sendRun(camp3Run)).json<any>();
+    expect(body.data.newQuests).toEqual([{ id: 'camp3', title: 'Дойти до 3-го лагеря', points: 200 }]);
+    const row = await env.DB.prepare('SELECT key, points FROM points').first<any>();
+    expect(row).toEqual({ key: 'q:autumn-2026:2026-W41:camp3', points: 200 });
+  });
+
+  it('повтор того же заплыва баллов не удваивает и новых заданий не сообщает', async () => {
+    inSeason();
+    const startedAt = Date.now() - 60_000;
+    await sendRun({ ...camp3Run, startedAt });
+    const again = await (await sendRun({ ...camp3Run, startedAt })).json<any>();
+    expect(again.data.newQuests).toEqual([]);
+    expect(await pointsCount()).toBe(1);
+  });
+
+  it('если первый запрос оборвался после записи заплыва, повтор всё равно начислит баллы', async () => {
+    inSeason();
+    const { upsertPlayer } = await import('../src/db/players');
+    const { insertRun } = await import('../src/db/runs');
+    await upsertPlayer(env.DB, { id: 956875, first_name: 'Виктор' }, 1000);
+    const startedAt = Date.now() - 60_000;
+    await insertRun(env.DB, {
+      tgId: 956875, level: 'normal', bank: 300, onboard: 40, meters: 1500, durationMs: 60_000,
+      oarsLost: 2, startedAt, rejected: null, stats: { gena: 0, bottles: 0, camps: 3 },
+    }, Math.floor(Date.now() / 1000));
+    expect(await pointsCount()).toBe(0);
+
+    const retry = await (await sendRun({ ...camp3Run, startedAt })).json<any>();
+    expect(retry.data.newQuests.map((q: any) => q.id)).toEqual(['camp3']);
+    expect(await pointsCount()).toBe(1);
+  });
+
+  it('статистика не по правилам обнуляется, а сам заплыв засчитывается', async () => {
+    inSeason();
+    const body = await (await sendRun({ ...camp3Run, stats: { gena: 0, bottles: 0, camps: 9 } })).json<any>();
+    expect(body.data.rejected).toBeNull();
+    expect(body.data.newQuests).toEqual([]);
+    expect(await savedStats()).toEqual({ gena: 0, bottles: 0, camps: 0 });
+    expect(await pointsCount()).toBe(0);
+  });
+
+  it('отклонённый заплыв баллов не даёт', async () => {
+    inSeason();
+    const body = await (await sendRun({ ...camp3Run, meters: 200_000 })).json<any>();
+    expect(body.data.rejected).toBe('too_fast');
+    expect(body.data.newQuests).toEqual([]);
+    expect(await pointsCount()).toBe(0);
+  });
+
+  it('до старта сезона баллов нет', async () => {
+    vi.setSystemTime(new Date('2026-09-29T12:00:00+03:00'));
+    const body = await (await sendRun(camp3Run)).json<any>();
+    expect(body.data.newQuests).toEqual([]);
+    expect(await pointsCount()).toBe(0);
   });
 });

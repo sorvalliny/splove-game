@@ -2,6 +2,8 @@ import type { Env } from '../index';
 import { ok, fail } from '../http/envelope';
 import { authorize } from '../http/auth';
 import { checkRun, LEVELS, type Level, type Rejection } from '../game/plausible';
+import { sanitizeStats } from '../game/stats';
+import { awardQuests, type Quest } from '../season/quests';
 import {
   insertRun, findRunByStart, overlapsPrevious, countRunsSince,
   applyBest, getBests, getBoard, getRank, type Best,
@@ -19,6 +21,7 @@ interface Body {
   durationMs: number;
   oarsLost: number;
   startedAt: number;
+  stats?: unknown;
 }
 
 const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -35,7 +38,7 @@ function parseBody(raw: unknown): Body | null {
 /** Ответ строится одинаково и для засчитанного, и для отклонённого заплыва. */
 async function outcome(
   env: Env, tgId: number, level: Level, bank: number,
-  rejected: Rejection | null, isRecord: boolean,
+  rejected: Rejection | null, isRecord: boolean, newQuests: Quest[] = [],
 ) {
   const bests = await getBests(env.DB, tgId);
   const best: Best | null = bests[level] ?? null;
@@ -47,6 +50,7 @@ async function outcome(
     delta: best ? bank - best.bank : null,
     rank,
     board: await getBoard(env.DB, level, BOARD_SIZE),
+    newQuests: newQuests.map(({ id, title, points }) => ({ id, title, points })),
   };
 }
 
@@ -64,7 +68,9 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
   // Повтор из офлайн-очереди: отдаём прежний исход, а не ошибку.
   const known = await findRunByStart(env.DB, tgId, body.startedAt);
   if (known) {
-    return ok(await outcome(env, tgId, known.level, known.bank, known.rejected as Rejection | null, false));
+    // Первый запрос мог оборваться между записью заплыва и начислением: начисление идемпотентно.
+    const owed = known.rejected === null ? await awardQuests(env.DB, tgId, nowSec) : [];
+    return ok(await outcome(env, tgId, known.level, known.bank, known.rejected as Rejection | null, false, owed));
   }
 
   let rejected: Rejection | 'too_often' | 'daily_limit' | null = checkRun({ ...body }, nowMs);
@@ -76,12 +82,14 @@ export async function handleRuns(req: Request, env: Env): Promise<Response> {
   const runId = await insertRun(env.DB, {
     tgId, level: body.level, bank: body.bank, onboard: body.onboard, meters: body.meters,
     durationMs: body.durationMs, oarsLost: body.oarsLost, startedAt: body.startedAt,
-    rejected,
+    rejected, stats: sanitizeStats(body.stats, body.meters),
   }, nowSec);
 
   const isRecord = rejected
     ? false
     : await applyBest(env.DB, tgId, body.level, body.bank, body.meters, runId, nowSec);
 
-  return ok(await outcome(env, tgId, body.level, body.bank, rejected as Rejection | null, isRecord));
+  const newQuests = rejected ? [] : await awardQuests(env.DB, tgId, nowSec);
+
+  return ok(await outcome(env, tgId, body.level, body.bank, rejected as Rejection | null, isRecord, newQuests));
 }
