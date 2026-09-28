@@ -39,6 +39,9 @@ export const MAX_POINTS_PER_METER = 40;
 const MIN_DURATION_MS = 5_000;
 /** Длительность приходит от клиента; без потолка ею можно нарисовать любой счёт. */
 const MAX_DURATION_MS = 3_600_000;
+/** Лимит времени «Шторма» в игре, миллисекунды. Заплыв на «Шторме» длиннее лимита плюс запас на связь сыграть нельзя. */
+export const STORM_LIMIT_MS = 330_000;
+const STORM_MAX_DURATION_MS = STORM_LIMIT_MS + 5_000;
 const CLOCK_AHEAD_MS = 5 * 60 * 1000;
 const CLOCK_BEHIND_MS = 30 * 24 * 3600 * 1000;
 
@@ -50,6 +53,7 @@ export function checkRun(run: RunInput, now: number): Rejection | null {
   const counts = [run.bank, run.onboard, run.meters, run.durationMs, run.oarsLost];
   if (!counts.every(isCount) || !Number.isInteger(run.startedAt)) return 'bad_numbers';
   if (run.durationMs > MAX_DURATION_MS) return 'bad_numbers';
+  if (run.level === 'hard' && run.durationMs > STORM_MAX_DURATION_MS) return 'bad_numbers';
   if (!LEVELS.includes(run.level)) return 'bad_level';
 
   if (run.startedAt > now + CLOCK_AHEAD_MS) return 'bad_clock';

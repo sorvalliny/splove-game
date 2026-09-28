@@ -77,4 +77,13 @@ describe('правдоподобие заплыва', () => {
   it('астрономическая длительность отклоняется', () => {
     expect(checkRun({ ...good, durationMs: 1e12, meters: 10 }, now)).toBe('bad_numbers');
   });
+
+  // Лимит «Шторма» 330 секунд: заплыв длиннее лимита с запасом на связь не мог быть сыгран как есть.
+  it('«Шторм» дольше 335 секунд отклоняется, другие сложности нет', () => {
+    const long = { ...good, durationMs: 400_000, startedAt: now - 400_000, meters: 1000 };
+    expect(checkRun({ ...long, level: 'hard' }, now)).toBe('bad_numbers');
+    expect(checkRun({ ...long, level: 'normal' }, now)).toBeNull();
+    const ok = { ...good, level: 'hard' as const, durationMs: 335_000, startedAt: now - 335_000, meters: 1000 };
+    expect(checkRun(ok, now)).toBeNull();
+  });
 });

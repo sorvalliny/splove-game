@@ -15,6 +15,8 @@ export interface RunRow {
   created_at: number;
   mode: 'free' | 'week';
   week: string | null;
+  finished: number;
+  time_ms: number | null;
 }
 
 export interface NewRun {
@@ -30,6 +32,8 @@ export interface NewRun {
   stats?: RunStats;
   mode?: 'free' | 'week';
   week?: string | null;
+  finished?: boolean;
+  timeMs?: number | null;
 }
 
 export interface Best {
@@ -56,14 +60,14 @@ export async function insertRun(db: D1Database, run: NewRun, now: number): Promi
   const res = await db
     .prepare(
       `INSERT INTO runs (tg_id, level, bank, onboard, meters, duration_ms, oars_lost, rejected,
-                         started_at, created_at, gena, bottles, camps, sanchez, mode, week)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                         started_at, created_at, gena, bottles, camps, sanchez, mode, week, finished, time_ms)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
        RETURNING id`,
     )
     .bind(run.tgId, run.level, run.bank, run.onboard, run.meters, run.durationMs,
           run.oarsLost, run.rejected, run.startedAt, now,
           run.stats?.gena ?? 0, run.stats?.bottles ?? 0, run.stats?.camps ?? 0, run.stats?.sanchez ?? 0,
-          run.mode ?? 'free', run.week ?? null)
+          run.mode ?? 'free', run.week ?? null, run.finished ? 1 : 0, run.timeMs ?? null)
     .first<{ id: number }>();
   if (!res) throw new Error('заплыв не сохранился');
   return res.id;
@@ -153,6 +157,63 @@ export async function getRank(
        )`,
     )
     .bind(level, bank, meters, updatedAt)
+    .first<{ n: number }>();
+  return (row?.n ?? 0) + 1;
+}
+
+export interface TimeRow { tg_id: number; name: string; photo_url: string | null; time_ms: number; updated_at: number }
+
+/** Рекорд времени: меньше — лучше; при равенстве остаётся прежний (кто раньше, тот выше). */
+export async function applyBestTime(
+  db: D1Database, tgId: number, level: Level, timeMs: number, runId: number, now: number,
+): Promise<boolean> {
+  const prev = await db
+    .prepare('SELECT time_ms FROM best_times WHERE tg_id = ? AND level = ?')
+    .bind(tgId, level)
+    .first<{ time_ms: number }>();
+  if (prev && timeMs >= prev.time_ms) return false;
+
+  await db
+    .prepare(
+      `INSERT INTO best_times (tg_id, level, time_ms, run_id, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(tg_id, level) DO UPDATE SET time_ms = ?3, run_id = ?4, updated_at = ?5`,
+    )
+    .bind(tgId, level, timeMs, runId, now)
+    .run();
+  return true;
+}
+
+export async function getBestTimes(
+  db: D1Database, tgId: number,
+): Promise<Partial<Record<Level, { time_ms: number; updated_at: number }>>> {
+  const { results } = await db
+    .prepare('SELECT level, time_ms, updated_at FROM best_times WHERE tg_id = ?')
+    .bind(tgId)
+    .all<{ level: Level; time_ms: number; updated_at: number }>();
+  return Object.fromEntries(results.map((r) => [r.level, { time_ms: r.time_ms, updated_at: r.updated_at }]));
+}
+
+export async function getTimeBoard(db: D1Database, level: Level, limit: number): Promise<TimeRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT p.tg_id, p.name, p.photo_url, b.time_ms, b.updated_at
+       FROM best_times b JOIN players p ON p.tg_id = b.tg_id
+       WHERE b.level = ?1 AND p.banned = 0
+       ORDER BY b.time_ms ASC, b.updated_at ASC, b.tg_id ASC LIMIT ?2`,
+    )
+    .bind(level, limit)
+    .all<TimeRow>();
+  return results;
+}
+
+/** Место по времени: сколько результатов строго лучше, плюс один. Забаненные не считаются. */
+export async function getTimeRank(db: D1Database, level: Level, timeMs: number, updatedAt: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM best_times b JOIN players p ON p.tg_id = b.tg_id
+       WHERE b.level = ?1 AND p.banned = 0 AND (b.time_ms < ?2 OR (b.time_ms = ?2 AND b.updated_at < ?3))`,
+    )
+    .bind(level, timeMs, updatedAt)
     .first<{ n: number }>();
   return (row?.n ?? 0) + 1;
 }

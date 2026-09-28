@@ -38,6 +38,7 @@ const sendRun = (over: Record<string, unknown> = {}, init = initData()) =>
   post('/api/runs', { ...base, startedAt: Date.now() - 60_000, ...over }, init);
 
 beforeEach(async () => {
+  await env.DB.prepare('DELETE FROM best_times').run();
   await env.DB.prepare('DELETE FROM points').run();
   await env.DB.prepare('DELETE FROM visits').run();
   await env.DB.prepare('DELETE FROM bests').run();
@@ -220,5 +221,83 @@ describe('сезонные баллы за заплыв', () => {
     const body = await (await sendRun(camp3Run)).json<any>();
     expect(body.data.newQuests).toEqual([]);
     expect(await pointsCount()).toBe(0);
+  });
+});
+
+describe('финиш и время', () => {
+  const finishRun = (over: Record<string, unknown> = {}) => sendRun({
+    level: 'normal', meters: 4000, bank: 900, onboard: 0, durationMs: 200_000,
+    finished: true, timeMs: 195_000, startedAt: Date.now() - 200_000, ...over,
+  });
+  const dbRow = () => env.DB.prepare('SELECT finished, time_ms FROM runs').first<any>();
+  const bestTime = () => env.DB.prepare('SELECT time_ms FROM best_times').first<any>();
+
+  it('принятый финиш сохраняет время, рекорд и место', async () => {
+    const d = (await (await finishRun()).json<any>()).data;
+    expect(d.rejected).toBeNull();
+    expect(d.finish).toEqual({ timeMs: 195_000, isRecord: true, rank: 1 });
+    expect(await dbRow()).toEqual({ finished: 1, time_ms: 195_000 });
+    expect((await bestTime()).time_ms).toBe(195_000);
+  });
+
+  it('медленнее рекорда время не меняет, быстрее — обновляет', async () => {
+    const t = Date.now();
+    await finishRun({ startedAt: t - 900_000 });
+    const slow = (await (await finishRun({ timeMs: 199_000, startedAt: t - 600_000 })).json<any>()).data;
+    expect(slow.finish.isRecord).toBe(false);
+    expect((await bestTime()).time_ms).toBe(195_000);
+    const fast = (await (await finishRun({ timeMs: 180_000, startedAt: t - 300_000 })).json<any>()).data;
+    expect(fast.finish).toMatchObject({ timeMs: 180_000, isRecord: true });
+    expect((await bestTime()).time_ms).toBe(180_000);
+  });
+
+  it.each([
+    ['быстрее физики (80 м/с)', { timeMs: 50_000 }],
+    ['не дотянул до финиша по метрам', { meters: 3999 }],
+    ['время больше времени заплыва', { timeMs: 203_000 }],
+    ['нулевое время', { timeMs: 0 }],
+    ['дробное время', { timeMs: 195_000.5 }],
+    ['время строкой', { timeMs: '195000' }],
+  ])('финиш молча снимается: %s, заплыв остаётся', async (_n, over) => {
+    const d = (await (await finishRun(over as Record<string, unknown>)).json<any>()).data;
+    expect(d.rejected).toBeNull();
+    expect(d.finish).toBeUndefined();
+    expect((await dbRow()).finished).toBe(0);
+    expect(await bestTime()).toBeNull();
+  });
+
+  it('на «Шторме» финиш дольше 330 секунд не принимается', async () => {
+    const d = (await (await finishRun({ level: 'hard', meters: 5000, durationMs: 331_000, timeMs: 331_000 })).json<any>()).data;
+    expect(d.finish).toBeUndefined();
+    expect(await bestTime()).toBeNull();
+  });
+
+  it('на «Шторме» финиш в лимит принимается', async () => {
+    const d = (await (await finishRun({ level: 'hard', meters: 5000, durationMs: 300_000, timeMs: 298_000 })).json<any>()).data;
+    expect(d.finish).toMatchObject({ timeMs: 298_000, isRecord: true });
+  });
+
+  it('отклонённый заплыв финишем не считается', async () => {
+    const d = (await (await finishRun({ meters: 400_000, durationMs: 200_000 })).json<any>()).data;
+    expect(d.rejected).toBe('too_fast');
+    expect(d.finish).toBeUndefined();
+    expect(await bestTime()).toBeNull();
+  });
+
+  it('заплыв без финиша время не пишет', async () => {
+    await sendRun({ level: 'normal', meters: 4000, bank: 900, durationMs: 200_000, startedAt: Date.now() - 200_000 });
+    expect(await dbRow()).toEqual({ finished: 0, time_ms: null });
+  });
+
+  it('финиш в заплыве недели пишется в заплыв, но не в таблицу времени', async () => {
+    vi.setSystemTime(new Date('2026-10-06T12:00:00+03:00'));
+    await finishRun({ mode: 'week', week: '2026-W41', startedAt: Date.now() - 200_000 });
+    expect(await dbRow()).toEqual({ finished: 1, time_ms: 195_000 });
+    expect(await bestTime()).toBeNull();
+  });
+
+  it('«Шторм» дольше 335 секунд целиком отклоняется как странные числа', async () => {
+    const d = (await (await sendRun({ level: 'hard', durationMs: 400_000, meters: 1000, startedAt: Date.now() - 400_000 })).json<any>()).data;
+    expect(d.rejected).toBe('bad_numbers');
   });
 });
