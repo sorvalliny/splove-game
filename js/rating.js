@@ -51,7 +51,7 @@ function paintWeek() {
   $('weekInfo').textContent = w.me
     ? `Твоё место ${Number(w.me.rank)} · ${ru(w.me.bank)}`
     : 'Ты ещё не плавал на этой неделе';
-  if (meta) meta.textContent = `Неделя ${w.weekKey.slice(5)} · до конца ${formatCountdown(w.endsAt * 1000 - Date.now())} · одна трасса для всех`;
+  if (meta) meta.textContent = `Неделя ${w.weekKey.slice(5)} · до конца ${formatCountdown(w.endsAt * 1000 - Date.now())}`;
   $('seasonWeek').innerHTML = weekBoardHtml(w.board);
 }
 
