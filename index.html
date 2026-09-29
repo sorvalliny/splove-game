@@ -54,21 +54,22 @@
   #board{justify-content:flex-start;padding-top:max(18px,env(safe-area-inset-top));background:rgba(22,38,42,.97);overflow-y:auto}
   #board h2{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:30px;margin:6px 0 14px;color:var(--kayak)}
   .rHead{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px;font-size:13px;opacity:.7;font-weight:600}
-  #board .q{max-width:460px;margin:0 0 10px;padding:2px 0 8px;border-bottom:1px solid rgba(245,241,230,.08)}
+  #board .q{max-width:460px;margin:0 0 8px}
+  #board .qp{white-space:nowrap;opacity:.85;font-size:14px}
   #board .q.done{opacity:.75}
   #board .sTitle{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:15px}
   #board b{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
-  #board .sBar{height:5px;border-radius:3px;background:rgba(245,241,230,.15);margin:6px 0 4px;overflow:hidden}
+  #board .sBar{height:3px;border-radius:2px;background:rgba(245,241,230,.15);margin:5px 0 0;overflow:hidden}
   #board .sBar i{display:block;height:100%;background:var(--kayak);border-radius:3px}
   #board small{opacity:.8;font-size:13px}
   #seasonBoard,#seasonWeek{list-style:none;margin:0;padding:0;max-width:460px}
-  #seasonWeek li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
+  #seasonWeek li{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:10px;font-size:15px}
   #seasonWeek li:nth-child(odd){background:rgba(245,241,230,.05)}
   #seasonWeek li.me{background:rgba(244,180,26,.18);box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
   #seasonWeek li b{min-width:28px;opacity:.75;color:var(--foam)}
   #seasonWeek li .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #seasonWeek li .pt{font-family:"Dela Gothic One",sans-serif;font-weight:400;color:var(--kayak)}
-  #seasonBoard li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
+  #seasonBoard li{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:10px;font-size:15px}
   #seasonBoard li:nth-child(odd){background:rgba(245,241,230,.05)}
   #seasonBoard li.me{background:rgba(244,180,26,.18);box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
   #seasonBoard li b{min-width:28px;opacity:.75;color:var(--foam)}
@@ -96,7 +97,7 @@
   #brdTabs button{flex:1;font:600 14px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:9px 8px;border:0;border-radius:22px;cursor:pointer}
   #brdTabs button.on{background:var(--foam);color:var(--ink)}
   #brdList{list-style:none;margin:0;padding:0;max-width:460px}
-  #brdList li{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;font-size:16px}
+  #brdList li{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:10px;font-size:15px}
   #brdList li:nth-child(odd){background:rgba(245,241,230,.05)}
   #brdList li.me{background:rgba(244,180,26,.18);box-shadow:inset 0 0 0 1px rgba(244,180,26,.45)}
   #brdList li b{font-family:"Dela Gothic One",sans-serif;font-weight:400;min-width:28px;opacity:.75}
@@ -110,10 +111,11 @@
   #rTabs button{flex:1;font:600 15px Onest,sans-serif;color:var(--foam);background:rgba(245,241,230,.1);padding:10px 8px;border:0;border-radius:22px;cursor:pointer}
   #rTabs button.on{background:var(--kayak);color:var(--ink)}
   #board [hidden]{display:none}
-  #board .sPrize{font-size:13px;margin:0 0 4px;opacity:.85;color:var(--kayak)}
-  #board .sMe{font-size:16px;margin:0 0 2px;font-weight:600}
+  #board .sPrize{font-size:13px;margin:0 0 12px;opacity:.85;color:var(--kayak)}
+  #board .sMe{font-size:18px;margin:0 0 4px;font-weight:600}
   #brdNote{font-size:13px;opacity:.7;margin:12px 0 0;max-width:460px}
   .overBtns{display:flex;gap:8px;flex-wrap:wrap}
+  #menu .overBtns #start{flex-basis:100%;text-align:center}
   .overBtns button.ghost{background:rgba(245,241,230,.12);color:var(--foam);font-size:14px;padding:10px 18px;border-radius:24px}
 </style>
 </head>
@@ -173,12 +175,11 @@
     <button data-t="records">Рекорды</button>
   </div>
   <div id="panSeason">
-    <p class="sPrize">Призы на сплаве в конце лета: 1-е место −15%, 2-е −10%, 3-е −5%</p>
     <p class="sMe" id="seasonMe"></p>
-    <div class="rHead"><span>Задания недели</span></div>
-    <div id="seasonQuests"></div>
-    <div class="rHead"><span>Таблица по баллам</span></div>
+    <p class="sPrize">Топ-3 в конце лета — скидка на сплав: −15% · −10% · −5%</p>
     <ol id="seasonBoard"></ol>
+    <div class="rHead"><span>Задания недели — за них баллы</span></div>
+    <div id="seasonQuests"></div>
     <div id="seasonChamps"></div>
   </div>
   <div id="panWeek" hidden>

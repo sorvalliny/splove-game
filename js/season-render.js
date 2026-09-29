@@ -10,9 +10,8 @@ export function questsHtml(quests) {
   if (!quests?.length) return '<p class="sNote">Задания появятся с началом сезона</p>';
   return quests.map((q) => `
     <div class="q${q.done ? ' done' : ''}">
-      <div class="sTitle"><span>${esc(q.title)}</span><b>+${ru(q.points)}</b></div>
+      <div class="sTitle"><span>${esc(q.title)}</span><span class="qp">${q.done ? '✓' : `${ru(q.progress)} / ${ru(q.goal)}`} · <b>+${ru(q.points)}</b></span></div>
       <div class="sBar"><i style="width:${q.done ? 100 : clampPct(q.progress, q.goal)}%"></i></div>
-      <small>${q.done ? 'выполнено' : `${ru(q.progress)} / ${ru(q.goal)}`}</small>
     </div>`).join('');
 }
 

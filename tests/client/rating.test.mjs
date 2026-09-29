@@ -65,6 +65,15 @@ test('по умолчанию открывается «Сезон»: меню с
   assert.deepEqual(onTab(), ['season']);
 });
 
+test('логика «Сезона»: сначала мои баллы, потом таблица, задания ниже таблицы', () => {
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const season = html.slice(html.indexOf('id="panSeason"'), html.indexOf('id="panWeek"'));
+  const at = (id) => season.indexOf(`id="${id}"`);
+  assert.ok(at('seasonMe') < at('seasonBoard'), 'баллы выше таблицы');
+  assert.ok(at('seasonBoard') < at('seasonQuests'), 'таблица выше заданий');
+  assert.doesNotMatch(season, /2-е −10%, 3-е/, 'строка призов короткая');
+});
+
 test('панель сезона компактна: нет длинной сноски-объяснения', async () => {
   await openRating();
   const full = els.panSeason.innerHTML + els.seasonMe.innerHTML + els.seasonQuests.innerHTML + els.seasonBoard.innerHTML;

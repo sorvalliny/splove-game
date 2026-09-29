@@ -16,7 +16,13 @@ test('выполненное задание помечено и полоса п�
   const html = questsHtml([quest({ done: true, progress: 1 })]);
   assert.match(html, /class="q done"/);
   assert.match(html, /width:100%/);
-  assert.match(html, /выполнено/);
+  assert.match(html, /✓/);
+});
+
+test('задание — одна строка: название слева, прогресс и баллы справа в той же строке', () => {
+  const html = questsHtml([quest({ goal: 10, progress: 4, points: 100, title: 'Собрать 10 бутылок' })]);
+  assert.match(html, /<div class="sTitle"><span>Собрать 10 бутылок<\/span><span class="qp">4 \/ 10 · <b>\+100<\/b><\/span><\/div>/);
+  assert.doesNotMatch(html, /<small>/, 'нет отдельной третьей строки');
 });
 
 test('большие числа прогресса форматируются по-русски', () => {
