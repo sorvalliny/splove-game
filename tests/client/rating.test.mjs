@@ -14,7 +14,7 @@ const make = (id, extra = {}) => {
   };
 };
 const ids = ['board', 'menu', 'panSeason', 'panWeek', 'panRecords', 'seasonMe', 'seasonQuests', 'seasonBoard',
-  'seasonChamps', 'weekInfo', 'seasonWeek', 'seasonCard', 'brdBack', 'brdList', 'brdNote', 'weekLine', 'startWeek', 'boosterRow', 'rHead'];
+  'seasonChamps', 'weekInfo', 'seasonWeek', 'seasonCard', 'brdBack', 'brdList', 'brdNote', 'weekLine', 'startWeek', 'boosterRow', 'rHead', 'weekMeta'];
 const els = Object.fromEntries(ids.map((id) => [id, make(id)]));
 els.board.classList.add('hide');
 const tabs = ['season', 'week', 'records'].map((t) => make(`tab-${t}`, { dataset: { t } }));
@@ -99,8 +99,8 @@ test('вкладка «Неделя»: неделя, моё место и таб
   showTab('week');
   assert.deepEqual(visible(), ['panWeek']);
   assert.deepEqual(onTab(), ['week']);
-  assert.match(els.weekInfo.textContent, /Неделя W41/);
-  assert.match(els.weekInfo.textContent, /твоё место 2/);
+  assert.match(els.weekInfo.textContent, /^Твоё место 2 · 800$/, 'крупно: место и результат');
+  assert.match(els.weekMeta.textContent, /Неделя W41 · до конца/, 'мелко: неделя и сколько осталось');
   assert.match(els.seasonWeek.innerHTML, /Боря/);
 });
 

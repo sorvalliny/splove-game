@@ -41,14 +41,17 @@ function paintSeason() {
 
 function paintWeek() {
   const w = weekData();
+  const meta = $('weekMeta');
   if (!w) {
     $('weekInfo').textContent = 'Заплыв недели виден, если открыть игру через бота';
+    if (meta) meta.textContent = '';
     $('seasonWeek').innerHTML = '';
     return;
   }
-  const left = formatCountdown(w.endsAt * 1000 - Date.now());
-  const mine = w.me ? ` · твоё место ${Number(w.me.rank)}` : '';
-  $('weekInfo').textContent = `Неделя ${w.weekKey.slice(5)} · до конца ${left}${mine}`;
+  $('weekInfo').textContent = w.me
+    ? `Твоё место ${Number(w.me.rank)} · ${ru(w.me.bank)}`
+    : 'Ты ещё не плавал на этой неделе';
+  if (meta) meta.textContent = `Неделя ${w.weekKey.slice(5)} · до конца ${formatCountdown(w.endsAt * 1000 - Date.now())} · одна трасса для всех`;
   $('seasonWeek').innerHTML = weekBoardHtml(w.board);
 }
 
