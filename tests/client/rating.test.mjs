@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 // ---------- поддельный документ ----------
 const make = (id, extra = {}) => {
@@ -13,7 +14,7 @@ const make = (id, extra = {}) => {
   };
 };
 const ids = ['board', 'menu', 'panSeason', 'panWeek', 'panRecords', 'seasonMe', 'seasonQuests', 'seasonBoard',
-  'seasonChamps', 'weekInfo', 'seasonWeek', 'seasonCard', 'brdBack', 'brdList', 'brdNote', 'weekLine', 'startWeek', 'boosterRow'];
+  'seasonChamps', 'weekInfo', 'seasonWeek', 'seasonCard', 'brdBack', 'brdList', 'brdNote', 'weekLine', 'startWeek', 'boosterRow', 'rHead'];
 const els = Object.fromEntries(ids.map((id) => [id, make(id)]));
 els.board.classList.add('hide');
 const tabs = ['season', 'week', 'records'].map((t) => make(`tab-${t}`, { dataset: { t } }));
@@ -62,6 +63,18 @@ test('по умолчанию открывается «Сезон»: меню с
   assert.equal(els.menu.classList.contains('hide'), true);
   assert.deepEqual(visible(), ['panSeason']);
   assert.deepEqual(onTab(), ['season']);
+});
+
+test('панель сезона компактна: нет длинной сноски-объяснения', async () => {
+  await openRating();
+  const full = els.panSeason.innerHTML + els.seasonMe.innerHTML + els.seasonQuests.innerHTML + els.seasonBoard.innerHTML;
+  assert.doesNotMatch(full, /Баллы дают задания недели/);
+});
+
+test('панель «Рекорды»: переключатель вида очки/время лежит в одном компактном заголовке, не отдельной вкладочной строкой', () => {
+  const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const records = html.slice(html.indexOf('id="panRecords"'), html.indexOf('id="brdList"'));
+  assert.match(records, /class="rHead"[\s\S]*id="brdKind"/, 'brdKind вложен в компактный заголовок rHead');
 });
 
 test('панель сезона: мои баллы и место, задания, таблица', async () => {
